@@ -68,7 +68,12 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 			// 	payload = []byte(request.Body)
 			// }
 
-			payload, _ := json.Marshal(request)
+			payload, err := json.Marshal(request)
+			if err != nil {
+				log.Println("Error marshalling request", err)
+				return nil, err
+			}
+
 			if err := json.Unmarshal(payload, newEvent.Interface()); err != nil {
 				return nil, err
 			}
@@ -206,7 +211,7 @@ func sendEvent(request events.APIGatewayProxyRequest, originalEvent interface{},
 }
 
 func sendEventBytes(event []byte) {
-	req, err := http.NewRequest("POST", "https://dlu6td3jn1.execute-api.us-west-2.amazonaws.com/dev/events", bytes.NewBuffer(event))
+	req, err := http.NewRequest("POST", "https://c8otdzrb0c.execute-api.us-west-2.amazonaws.com/dev/events", bytes.NewBuffer(event))
 	if err != nil {
 		log.Println("Error http.NewRequest:", err)
 		return
