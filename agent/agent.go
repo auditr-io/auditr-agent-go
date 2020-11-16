@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/aws/aws-lambda-go/events"
 )
 
@@ -146,31 +147,6 @@ func validateArguments(handler reflect.Type) (bool, error) {
 }
 
 func sendEvent(request events.APIGatewayProxyRequest, originalEvent interface{}, val interface{}, err error) {
-	// req, err := json.Unmarshal(args)
-	// if err != nil {
-	// 	log.Println("Error in unmarshalling ", err)
-	// 	return
-	// }
-	// req, err := json.Unmarshal(args)
-	// if err != nil {
-	// 	log.Println("Error in unmarshalling ", err)
-	// 	return
-	// }
-	// event := Event{
-	// 	ID:      "",
-	// 	Actor:   "user@auditr.io",
-	// 	ActorID: "6b45a096-0e41-42c0-ab71-e6ec29e23fee",
-	// }
-
-	// err := json.Unmarshal([]byte(request.Body), &event)
-	// if err != nil {
-	// 	fmt.Println("json.Unmarshal err:", err)
-	// 	return events.APIGatewayProxyResponse{
-	// 		StatusCode: 500,
-	// 		Body:       err.Error(),
-	// 	}, nil
-	// }
-
 	event := Event{
 		ID:       "1jnAFJlXHOm25Czq0CeZ8OrHA2l",
 		Actor:    "user@auditr.io",
@@ -189,14 +165,6 @@ func sendEvent(request events.APIGatewayProxyRequest, originalEvent interface{},
 		event.RequestedAt = request.RequestContext.RequestTimeEpoch
 	}
 
-	// event.Action = event.Request["httpMethod"].(string)
-	// reqContext := event.Request["requestContext"].(map[string]interface{})
-	// identity := reqContext["identity"].(map[string]interface{})
-	// event.Location = identity["sourceIp"].(string)
-	// event.RequestID = reqContext["requestId"].(string)
-	// event.RequestedAt = reqContext["requestTimeEpoch"].(float64)
-
-	// event.Response = val
 	e, err := json.Marshal(event)
 	if err != nil {
 		log.Println("Error in marshalling ", err)
@@ -211,7 +179,7 @@ func sendEvent(request events.APIGatewayProxyRequest, originalEvent interface{},
 }
 
 func sendEventBytes(event []byte) {
-	req, err := http.NewRequest("POST", "https://c8otdzrb0c.execute-api.us-west-2.amazonaws.com/dev/events", bytes.NewBuffer(event))
+	req, err := http.NewRequest("POST", config.EventsUrl, bytes.NewBuffer(event))
 	if err != nil {
 		log.Println("Error http.NewRequest:", err)
 		return
