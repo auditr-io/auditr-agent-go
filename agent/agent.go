@@ -13,6 +13,7 @@ import (
 
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/segmentio/ksuid"
 )
 
 // Agent is an auditr agent that collects and reports events
@@ -148,7 +149,7 @@ func validateArguments(handler reflect.Type) (bool, error) {
 
 func sendEvent(request events.APIGatewayProxyRequest, originalEvent interface{}, val interface{}, err error) {
 	event := Event{
-		ID:       "1jnAFJlXHOm25Czq0CeZ8OrHA2l",
+		ID:       ksuid.New().String(),
 		Actor:    "user@auditr.io",
 		ActorID:  "6b45a096-0e41-42c0-ab71-e6ec29e23fee",
 		Request:  request,
