@@ -1,23 +1,18 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"reflect"
-	"time"
 
-	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/segmentio/ksuid"
 )
 
 // Agent is an auditr agent that collects and reports events
 type Agent struct {
+	Publisher publisher
 }
 
 type lambdaFunction func(context.Context, events.APIGatewayProxyRequest) (interface{}, error)
@@ -42,7 +37,9 @@ type Event struct {
 
 // New creates a new agent instance
 func New() *Agent {
-	return &Agent{}
+	return &Agent{
+		Publisher: newPublisher(),
+	}
 }
 
 // Wrap wraps the handler so the agent can intercept
@@ -64,11 +61,6 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 		if (handlerType.NumIn() == 1 && !takesContext) || handlerType.NumIn() == 2 {
 			newEventType := handlerType.In(handlerType.NumIn() - 1)
 			newEvent := reflect.New(newEventType)
-
-			// payload := []byte(`{}`)
-			// if request.HTTPMethod == "POST" {
-			// 	payload = []byte(request.Body)
-			// }
 
 			payload, err := json.Marshal(request)
 			if err != nil {
@@ -113,7 +105,7 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 		}
 
 		// execute posthooks
-		sendEvent(request, elem.Interface(), val, err)
+		a.Publisher.Publish(request, val, err)
 
 		return val, err
 	}
@@ -145,77 +137,4 @@ func validateArguments(handler reflect.Type) (bool, error) {
 	}
 
 	return handlerTakesContext, nil
-}
-
-func sendEvent(request events.APIGatewayProxyRequest, originalEvent interface{}, val interface{}, err error) {
-	event := Event{
-		ID:       ksuid.New().String(),
-		Actor:    "user@auditr.io",
-		ActorID:  "6b45a096-0e41-42c0-ab71-e6ec29e23fee",
-		Request:  request,
-		Response: val,
-		Error:    err,
-	}
-
-	event.Action = request.HTTPMethod
-	event.Resource = request.Resource
-	event.Location = request.RequestContext.Identity.SourceIP
-	event.RequestID = request.RequestContext.RequestID
-	event.RequestedAt = time.Now().Unix()
-	if request.RequestContext.RequestTimeEpoch > 0 {
-		event.RequestedAt = request.RequestContext.RequestTimeEpoch
-	}
-
-	e, err := json.Marshal(event)
-	if err != nil {
-		log.Println("Error in marshalling ", err)
-		return
-	}
-
-	et := Event{}
-	json.Unmarshal(e, &et)
-	log.Println(et)
-
-	sendEventBytes(e)
-}
-
-func sendEventBytes(event []byte) {
-	req, err := http.NewRequest("POST", config.EventsUrl, bytes.NewBuffer(event))
-	if err != nil {
-		log.Println("Error http.NewRequest:", err)
-		return
-	}
-
-	req.Close = true
-	req.Header.Set("Authorization", "Bearer blablabla")
-	req.Header.Set("Content-Type", "application/json")
-
-	client := createHTTPClient()
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Println("Error client.Do(req):", err)
-		return
-	}
-
-	if resp.Body == nil {
-		return
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Println("ioutil.ReadAll(resp.Body):", err)
-		return
-	}
-
-	log.Println("response Body:", string(body))
-
-	resp.Body.Close()
-}
-
-func createHTTPClient() *http.Client {
-	transport := &http.Transport{}
-
-	return &http.Client{
-		Transport: transport,
-	}
 }
