@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	BaseUrl   string
-	EventsUrl string
+	BaseUrl      string
+	EventsUrl    string
+	TargetRoutes []string
 )
 
 func init() {
@@ -21,6 +22,13 @@ func init() {
 
 	BaseUrl = cfg["base_url"].(string)
 	EventsUrl = BaseUrl + "/events"
+
+	// TODO: get from client config
+	TargetRoutes = []string{
+		"/events",
+		"/events/:id",
+		"/hello/:name",
+	}
 }
 
 func getConfig() (map[string]interface{}, error) {

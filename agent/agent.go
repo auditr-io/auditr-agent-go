@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"reflect"
+
+	"github.com/auditr-io/auditr-agent-go/config"
 
 	"github.com/aws/aws-lambda-go/events"
 )
@@ -13,6 +16,7 @@ import (
 // Agent is an auditr agent that collects and reports events
 type Agent struct {
 	Publisher publisher
+	tree      *node
 }
 
 type lambdaFunction func(context.Context, events.APIGatewayProxyRequest) (interface{}, error)
@@ -35,10 +39,45 @@ type Event struct {
 	Error       error       `json:"error"`
 }
 
+// Handle is a function that can be registered to a route to handle HTTP
+// requests. Like http.HandlerFunc, but has a third parameter for the values of
+// wildcards (path variables).
+type Handle func(http.ResponseWriter, *http.Request, Params)
+
+// Param is a single URL parameter, consisting of a key and a value.
+type Param struct {
+	Key   string
+	Value string
+}
+
+// Params is a Param-slice, as returned by the router.
+// The slice is ordered, the first URL parameter is also the first slice value.
+// It is therefore safe to read values by the index.
+type Params []Param
+
+func getParams() *Params {
+	ps := make(Params, 0, 20)
+	return &ps
+}
+
+var fakeHandlerValue string
+
+func fakeHandler(val string) Handle {
+	return func(http.ResponseWriter, *http.Request, Params) {
+		fakeHandlerValue = val
+	}
+}
+
 // New creates a new agent instance
 func New() *Agent {
+	tree := &node{}
+	for _, route := range config.TargetRoutes {
+		tree.addRoute(route, fakeHandler(route))
+	}
+
 	return &Agent{
 		Publisher: newPublisher(),
+		tree:      tree,
 	}
 }
 
@@ -73,11 +112,8 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 			}
 
 			elem = newEvent.Elem()
-			// ctx = utils.SetEventTypeToContext(ctx, newEventType)
 			ctx = context.WithValue(ctx, eventTypeKey{}, newEventType)
 		}
-
-		// TODO: execute prehooks
 
 		if takesContext {
 			args = append(args, reflect.ValueOf(ctx))
@@ -104,8 +140,11 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 			val = nil
 		}
 
-		// execute posthooks
-		a.Publisher.Publish(request, val, err)
+		// check if path is audited
+		handler, _, _ := a.tree.getValue(request.Path, getParams)
+		if handler != nil {
+			a.Publisher.Publish(request, val, err)
+		}
 
 		return val, err
 	}
