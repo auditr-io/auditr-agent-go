@@ -22,15 +22,6 @@ import (
 // 	}
 // }
 
-// Used as a workaround since we can't compare functions or their addresses
-// var fakeHandlerValue string
-
-// func fakeHandler(val string) Handle {
-// 	return func(http.ResponseWriter, *http.Request, Params) {
-// 		fakeHandlerValue = val
-// 	}
-// }
-
 type testRequests []struct {
 	path       string
 	nilHandler bool
@@ -55,7 +46,7 @@ func checkRequests(t *testing.T, tree *node, requests testRequests) {
 		case request.nilHandler:
 			t.Errorf("handle mismatch for route '%s': Expected nil handle", request.path)
 		default:
-			handler(nil, nil, nil)
+			fakeHandlerValue := handler()
 			if fakeHandlerValue != request.route {
 				t.Errorf("handle mismatch for route '%s': Wrong handle (%s != %s)", request.path, fakeHandlerValue, request.route)
 			}
@@ -118,7 +109,7 @@ func TestTreeAddAndGet(t *testing.T) {
 		"/β",
 	}
 	for _, route := range routes {
-		tree.addRoute(route, fakeHandler(route))
+		tree.addRoute(route, newHandler(route))
 	}
 
 	// printChildren(tree, "")
@@ -160,7 +151,7 @@ func TestTreeWildcard(t *testing.T) {
 		"/info/:user/project/:project",
 	}
 	for _, route := range routes {
-		tree.addRoute(route, fakeHandler(route))
+		tree.addRoute(route, newHandler(route))
 	}
 
 	// printChildren(tree, "")
@@ -270,7 +261,7 @@ func TestTreeDupliatePath(t *testing.T) {
 	for i := range routes {
 		route := routes[i]
 		recv := catchPanic(func() {
-			tree.addRoute(route, fakeHandler(route))
+			tree.addRoute(route, newHandler(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -338,7 +329,7 @@ func TestTreeCatchAllConflictRoot(t *testing.T) {
 func TestTreeCatchMaxParams(t *testing.T) {
 	tree := &node{}
 	var route = "/cmd/*filepath"
-	tree.addRoute(route, fakeHandler(route))
+	tree.addRoute(route, newHandler(route))
 }
 
 func TestTreeDoubleWildcard(t *testing.T) {
@@ -396,7 +387,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 	for i := range routes {
 		route := routes[i]
 		recv := catchPanic(func() {
-			tree.addRoute(route, fakeHandler(route))
+			tree.addRoute(route, newHandler(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -453,7 +444,7 @@ func TestTreeRootTrailingSlashRedirect(t *testing.T) {
 	tree := &node{}
 
 	recv := catchPanic(func() {
-		tree.addRoute("/:test", fakeHandler("/:test"))
+		tree.addRoute("/:test", newHandler("/:test"))
 	})
 	if recv != nil {
 		t.Fatalf("panic inserting test route: %v", recv)
@@ -512,7 +503,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	for i := range routes {
 		route := routes[i]
 		recv := catchPanic(func() {
-			tree.addRoute(route, fakeHandler(route))
+			tree.addRoute(route, newHandler(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -634,8 +625,8 @@ func TestTreeInvalidNodeType(t *testing.T) {
 	const panicMsg = "invalid node type"
 
 	tree := &node{}
-	tree.addRoute("/", fakeHandler("/"))
-	tree.addRoute("/:page", fakeHandler("/:page"))
+	tree.addRoute("/", newHandler("/"))
+	tree.addRoute("/:page", newHandler("/:page"))
 
 	// set invalid node type
 	tree.children[0].nType = 42
@@ -686,11 +677,11 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 
 		for i := range routes {
 			route := routes[i]
-			tree.addRoute(route, fakeHandler(route))
+			tree.addRoute(route, newHandler(route))
 		}
 
 		recv := catchPanic(func() {
-			tree.addRoute(conflict.route, fakeHandler(conflict.route))
+			tree.addRoute(conflict.route, newHandler(conflict.route))
 		})
 
 		if !regexp.MustCompile(fmt.Sprintf("'%s' in new path .* conflicts with existing wildcard '%s' in existing prefix '%s'", conflict.segPath, conflict.existSegPath, conflict.existPath)).MatchString(fmt.Sprint(recv)) {

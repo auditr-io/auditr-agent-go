@@ -15,7 +15,7 @@ import (
 
 type publisher interface {
 	// Publish creates an audit event and sends it to a listener
-	Publish(request events.APIGatewayProxyRequest, response interface{}, err error)
+	Publish(route string, request events.APIGatewayProxyRequest, response interface{}, err error)
 }
 
 // Publisher facilitates the publishing of audit events to auditr
@@ -30,8 +30,12 @@ func newPublisher() *Publisher {
 }
 
 // Publish creates an audit event and sends it to auditr
-func (p *Publisher) Publish(request events.APIGatewayProxyRequest, response interface{}, err error) {
-	event := p.buildEvent(request, response, err)
+func (p *Publisher) Publish(
+	route string,
+	request events.APIGatewayProxyRequest,
+	response interface{},
+	err error) {
+	event := p.buildEvent(route, request, response, err)
 
 	e, err := json.Marshal(event)
 	if err != nil {
@@ -43,23 +47,24 @@ func (p *Publisher) Publish(request events.APIGatewayProxyRequest, response inte
 }
 
 func (p *Publisher) buildEvent(
+	route string,
 	request events.APIGatewayProxyRequest,
 	response interface{},
 	err error) *Event {
 	event := &Event{
-		ID:       ksuid.New().String(),
-		Actor:    "user@auditr.io",
-		ActorID:  "6b45a096-0e41-42c0-ab71-e6ec29e23fee",
-		Request:  request,
-		Response: response,
-		Error:    err,
+		ID:          ksuid.New().String(),
+		Actor:       "user@auditr.io",
+		ActorID:     "6b45a096-0e41-42c0-ab71-e6ec29e23fee",
+		Action:      request.HTTPMethod,
+		Location:    request.RequestContext.Identity.SourceIP,
+		RequestID:   request.RequestContext.RequestID,
+		RequestedAt: time.Now().Unix(),
+		Resource:    route,
+		Request:     request,
+		Response:    response,
+		Error:       err,
 	}
 
-	event.Action = request.HTTPMethod
-	event.Resource = request.Resource
-	event.Location = request.RequestContext.Identity.SourceIP
-	event.RequestID = request.RequestContext.RequestID
-	event.RequestedAt = time.Now().Unix()
 	if request.RequestContext.RequestTimeEpoch > 0 {
 		event.RequestedAt = request.RequestContext.RequestTimeEpoch
 	}

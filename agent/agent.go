@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"reflect"
 
 	"github.com/auditr-io/auditr-agent-go/config"
@@ -42,7 +41,7 @@ type Event struct {
 // Handle is a function that can be registered to a route to handle HTTP
 // requests. Like http.HandlerFunc, but has a third parameter for the values of
 // wildcards (path variables).
-type Handle func(http.ResponseWriter, *http.Request, Params)
+type Handle func() string
 
 // Param is a single URL parameter, consisting of a key and a value.
 type Param struct {
@@ -60,11 +59,9 @@ func getParams() *Params {
 	return &ps
 }
 
-var fakeHandlerValue string
-
-func fakeHandler(val string) Handle {
-	return func(http.ResponseWriter, *http.Request, Params) {
-		fakeHandlerValue = val
+func newHandler(route string) Handle {
+	return func() string {
+		return route
 	}
 }
 
@@ -72,7 +69,7 @@ func fakeHandler(val string) Handle {
 func New() *Agent {
 	tree := &node{}
 	for _, route := range config.TargetRoutes {
-		tree.addRoute(route, fakeHandler(route))
+		tree.addRoute(route, newHandler(route))
 	}
 
 	return &Agent{
@@ -143,7 +140,7 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 		// check if path is audited
 		handler, _, _ := a.tree.getValue(request.Path, getParams)
 		if handler != nil {
-			a.Publisher.Publish(request, val, err)
+			a.Publisher.Publish(handler(), request, val, err)
 		}
 
 		return val, err
