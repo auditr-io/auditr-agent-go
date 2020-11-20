@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 
 	"github.com/auditr-io/auditr-agent-go/config"
 
@@ -15,7 +16,8 @@ import (
 // Agent is an auditr agent that collects and reports events
 type Agent struct {
 	Publisher publisher
-	tree      *node
+	target    *node
+	sampled   *node
 }
 
 type lambdaFunction func(context.Context, events.APIGatewayProxyRequest) (interface{}, error)
@@ -67,14 +69,19 @@ func newHandler(route string) Handle {
 
 // New creates a new agent instance
 func New() *Agent {
-	tree := &node{}
+	target := &node{}
 	for _, route := range config.TargetRoutes {
-		tree.addRoute(route, newHandler(route))
+		target.addRoute(route, newHandler(route))
+	}
+	sampled := &node{}
+	for _, route := range config.SampledRoutes {
+		sampled.addRoute(route, newHandler(route))
 	}
 
 	return &Agent{
 		Publisher: newPublisher(),
-		tree:      tree,
+		target:    target,
+		sampled:   sampled,
 	}
 }
 
@@ -138,9 +145,24 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 		}
 
 		// check if path is audited
-		handler, _, _ := a.tree.getValue(request.Path, getParams)
+		handler, _, _ := a.target.getValue(request.Path, getParams)
 		if handler != nil {
 			a.Publisher.Publish(handler(), request, val, err)
+		} else {
+			handler, _, _ := a.sampled.getValue(request.Path, getParams)
+			if handler == nil {
+				// sample the path
+				var route string
+				if request.Resource == "{proxy+}" {
+					route = request.Path
+				} else {
+					r := strings.NewReplacer("{", ":", "}", "")
+					route = r.Replace(request.Resource)
+				}
+				a.Publisher.Publish(route, request, val, err)
+				// TODO update sampled in /events
+				a.sampled.addRoute(route, newHandler(route))
+			}
 		}
 
 		return val, err

@@ -9,10 +9,17 @@ import (
 )
 
 var (
-	BaseUrl      string
-	EventsUrl    string
-	TargetRoutes []string
+	BaseUrl       string
+	EventsUrl     string
+	TargetRoutes  []string
+	SampledRoutes []string
 )
+
+type Config struct {
+	BaseUrl       string   `json:"base_url"`
+	TargetRoutes  []string `json:"target"`
+	SampledRoutes []string `json:"sampled"`
+}
 
 func init() {
 	cfg, err := getConfig()
@@ -20,18 +27,14 @@ func init() {
 		log.Fatalln("Error getting config:", err)
 	}
 
-	BaseUrl = cfg["base_url"].(string)
+	BaseUrl = cfg.BaseUrl
 	EventsUrl = BaseUrl + "/events"
 
-	// TODO: get from client config
-	TargetRoutes = []string{
-		"/events",
-		"/events/:id",
-		"/hello/:name",
-	}
+	TargetRoutes = cfg.TargetRoutes
+	SampledRoutes = cfg.SampledRoutes
 }
 
-func getConfig() (map[string]interface{}, error) {
+func getConfig() (*Config, error) {
 	req, err := http.NewRequest("GET", "https://config.auditr.io", nil)
 	if err != nil {
 		log.Println("Error http.NewRequest:", err)
@@ -40,6 +43,7 @@ func getConfig() (map[string]interface{}, error) {
 
 	req.Close = true
 	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("X-Auditr-Org-ID", "1kXXAxhc0J0D7RqKjFTmq91TJ5J")
 	req.Header.Set("Content-Type", "application/json")
 
 	client := createHTTPClient()
@@ -61,14 +65,14 @@ func getConfig() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	cfg := map[string]interface{}{}
+	cfg := Config{}
 	err = json.Unmarshal(body, &cfg)
 	if err != nil {
 		log.Println("Error unmarshalling body:", err)
 		return nil, err
 	}
 
-	return cfg, nil
+	return &cfg, nil
 }
 
 func createHTTPClient() *http.Client {
