@@ -31,7 +31,8 @@ type Event struct {
 	Action      string      `json:"action"`
 	Actor       string      `json:"actor"`
 	ActorID     string      `json:"actor_id"`
-	Resource    string      `json:"resource"`
+	RouteType   string      `json:"route_type"`
+	Route       string      `json:"route"`
 	Location    string      `json:"location"`
 	RequestID   string      `json:"request_id"`
 	RequestedAt int64       `json:"requested_at"`
@@ -147,7 +148,7 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 		// check if path is audited
 		handler, _, _ := a.target.getValue(request.Path, getParams)
 		if handler != nil {
-			a.Publisher.Publish(handler(), request, val, err)
+			a.Publisher.Publish("target", handler(), request, val, err)
 		} else {
 			handler, _, _ := a.sampled.getValue(request.Path, getParams)
 			if handler == nil {
@@ -159,7 +160,7 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 					r := strings.NewReplacer("{", ":", "}", "")
 					route = r.Replace(request.Resource)
 				}
-				a.Publisher.Publish(route, request, val, err)
+				a.Publisher.Publish("sampled", route, request, val, err)
 				// TODO update sampled in /events
 				a.sampled.addRoute(route, newHandler(route))
 			}

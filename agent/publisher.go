@@ -15,7 +15,12 @@ import (
 
 type publisher interface {
 	// Publish creates an audit event and sends it to a listener
-	Publish(route string, request events.APIGatewayProxyRequest, response interface{}, err error)
+	Publish(
+		routeType string,
+		route string,
+		request events.APIGatewayProxyRequest,
+		response interface{},
+		err error)
 }
 
 // Publisher facilitates the publishing of audit events to auditr
@@ -31,11 +36,12 @@ func newPublisher() *Publisher {
 
 // Publish creates an audit event and sends it to auditr
 func (p *Publisher) Publish(
+	routeType string,
 	route string,
 	request events.APIGatewayProxyRequest,
 	response interface{},
 	err error) {
-	event := p.buildEvent(route, request, response, err)
+	event := p.buildEvent(routeType, route, request, response, err)
 
 	e, err := json.Marshal(event)
 	if err != nil {
@@ -47,6 +53,7 @@ func (p *Publisher) Publish(
 }
 
 func (p *Publisher) buildEvent(
+	routeType string,
 	route string,
 	request events.APIGatewayProxyRequest,
 	response interface{},
@@ -59,7 +66,8 @@ func (p *Publisher) buildEvent(
 		Location:    request.RequestContext.Identity.SourceIP,
 		RequestID:   request.RequestContext.RequestID,
 		RequestedAt: time.Now().Unix(),
-		Resource:    route,
+		RouteType:   routeType,
+		Route:       route,
 		Request:     request,
 		Response:    response,
 		Error:       err,

@@ -49,7 +49,7 @@ func TestPublish(t *testing.T) {
 		return &(http.Response{}), nil
 	})
 
-	p.Publish("/hello", request, response, nil)
+	p.Publish("sampled", "/hello", request, response, nil)
 }
 
 func TestBuildEvent(t *testing.T) {
@@ -76,12 +76,14 @@ func TestBuildEvent(t *testing.T) {
 	err := errors.New("test error")
 
 	p := newPublisher()
+	routeType := "sampled"
 	route := "/events/:id"
-	event := p.buildEvent(route, request, response, err)
+	event := p.buildEvent(routeType, route, request, response, err)
 
 	assert.NotEmpty(t, event.ID, "EventID is empty")
 	assert.Equal(t, request.HTTPMethod, event.Action, "Action didn't match")
-	assert.Equal(t, route, event.Resource, "Resource didn't match")
+	assert.Equal(t, routeType, event.RouteType, "RouteType didn't match")
+	assert.Equal(t, route, event.Route, "Route didn't match")
 	assert.Equal(t, request.RequestContext.Identity.SourceIP, event.Location, "Location didn't match")
 	assert.Equal(t, request.RequestContext.RequestID, event.RequestID, "RequestID didn't match")
 	assert.NotEmpty(t, event.RequestedAt, "RequestedAt is empty")
