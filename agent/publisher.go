@@ -81,6 +81,7 @@ func (p *Publisher) sendEventBytes(event []byte) {
 
 	req.Close = true
 	req.Header.Set("Authorization", "Bearer blablabla")
+	req.Header.Set("X-Auditr-Org-ID", "1kXXAxhc0J0D7RqKjFTmq91TJ5J") // get from env
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(req)

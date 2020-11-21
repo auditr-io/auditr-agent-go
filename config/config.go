@@ -43,7 +43,7 @@ func getConfig() (*Config, error) {
 
 	req.Close = true
 	req.Header.Set("Authorization", "Bearer token")
-	req.Header.Set("X-Auditr-Org-ID", "1kXXAxhc0J0D7RqKjFTmq91TJ5J")
+	req.Header.Set("X-Auditr-Org-ID", "1kXXAxhc0J0D7RqKjFTmq91TJ5J") // get from env
 	req.Header.Set("Content-Type", "application/json")
 
 	client := createHTTPClient()
