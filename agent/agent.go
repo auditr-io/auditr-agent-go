@@ -162,6 +162,7 @@ func (a *Agent) auditOrSample(
 		route = handler()
 		a.Publisher.Publish("target", route, request, val, err)
 		log.Printf("route: %s is targeted", route)
+		return
 	}
 
 	handler, _, _ = a.sampled.getValue(request.Path, getParams)
