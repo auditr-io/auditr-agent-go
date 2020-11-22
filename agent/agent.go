@@ -145,29 +145,39 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 			val = nil
 		}
 
-		// check if path is audited
-		handler, _, _ := a.target.getValue(request.Path, getParams)
-		if handler != nil {
-			a.Publisher.Publish("target", handler(), request, val, err)
-		} else {
-			handler, _, _ := a.sampled.getValue(request.Path, getParams)
-			if handler == nil {
-				// sample the path
-				var route string
-				if request.Resource == "{proxy+}" {
-					route = request.Path
-				} else {
-					r := strings.NewReplacer("{", ":", "}", "")
-					route = r.Replace(request.Resource)
-				}
-				a.Publisher.Publish("sampled", route, request, val, err)
-				// TODO update sampled in /events
-				a.sampled.addRoute(route, newHandler(route))
-			}
-		}
+		a.auditOrSample(request, val, err)
 
 		return val, err
 	}
+}
+
+func (a *Agent) auditOrSample(
+	request events.APIGatewayProxyRequest,
+	val interface{},
+	err error) {
+	handler, _, _ := a.target.getValue(request.Path, getParams)
+	if handler != nil {
+		// route is targeted
+		a.Publisher.Publish("target", handler(), request, val, err)
+	}
+
+	handler, _, _ = a.sampled.getValue(request.Path, getParams)
+	if handler != nil {
+		// route is already sampled
+		return
+	}
+
+	// sample the new route
+	var route string
+	if request.Resource == "{proxy+}" {
+		route = request.Path
+	} else {
+		r := strings.NewReplacer("{", ":", "}", "")
+		route = r.Replace(request.Resource)
+	}
+
+	a.Publisher.Publish("sampled", route, request, val, err)
+	a.sampled.addRoute(route, newHandler(route))
 }
 
 // errorHandler returns a stand-in lambda function that
