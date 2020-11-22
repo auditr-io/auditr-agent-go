@@ -155,20 +155,23 @@ func (a *Agent) auditOrSample(
 	request events.APIGatewayProxyRequest,
 	val interface{},
 	err error) {
+	var route string
 	handler, _, _ := a.target.getValue(request.Path, getParams)
 	if handler != nil {
 		// route is targeted
-		a.Publisher.Publish("target", handler(), request, val, err)
+		route = handler()
+		a.Publisher.Publish("target", route, request, val, err)
+		log.Printf("route: %s is targeted", route)
 	}
 
 	handler, _, _ = a.sampled.getValue(request.Path, getParams)
 	if handler != nil {
 		// route is already sampled
+		log.Printf("route: %s is already sampled", handler())
 		return
 	}
 
 	// sample the new route
-	var route string
 	if request.Resource == "{proxy+}" {
 		route = request.Path
 	} else {
@@ -178,6 +181,7 @@ func (a *Agent) auditOrSample(
 
 	a.Publisher.Publish("sampled", route, request, val, err)
 	a.sampled.addRoute(route, newHandler(route))
+	log.Printf("route: %s is sampled", route)
 }
 
 // errorHandler returns a stand-in lambda function that
