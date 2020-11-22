@@ -81,7 +81,7 @@ func (p *Publisher) buildEvent(
 }
 
 func (p *Publisher) sendEventBytes(event []byte) {
-	req, err := http.NewRequest("POST", config.EventsUrl, bytes.NewBuffer(event))
+	req, err := http.NewRequest("POST", config.EventsURL, bytes.NewBuffer(event))
 	if err != nil {
 		log.Println("Error http.NewRequest:", err)
 		return
