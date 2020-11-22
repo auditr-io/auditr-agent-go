@@ -6,12 +6,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBaseUrl(t *testing.T) {
-	assert.NotEmpty(t, BaseUrl, "BaseUrl is empty")
+func TestBaseURL(t *testing.T) {
+	assert.NotEmpty(t, BaseURL, "BaseURL is empty")
 }
 
-func TestEventsUrl(t *testing.T) {
-	assert.NotEmpty(t, EventsUrl, "EventsUrl is empty")
+func TestEventsURL(t *testing.T) {
+	assert.NotEmpty(t, EventsURL, "EventsURL is empty")
 }
 
 func TestTargetRoutes(t *testing.T) {

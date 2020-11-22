@@ -9,14 +9,15 @@ import (
 )
 
 var (
-	BaseUrl       string
-	EventsUrl     string
+	BaseURL       string
+	EventsURL     string
 	TargetRoutes  []string
 	SampledRoutes []string
 )
 
-type Config struct {
-	BaseUrl       string   `json:"base_url"`
+type config struct {
+	BaseURL       string   `json:"base_url"`
+	EventsPath    string   `json:"events_path"`
 	TargetRoutes  []string `json:"target"`
 	SampledRoutes []string `json:"sampled"`
 }
@@ -27,14 +28,14 @@ func init() {
 		log.Fatalln("Error getting config:", err)
 	}
 
-	BaseUrl = cfg.BaseUrl
-	EventsUrl = BaseUrl + "/events"
+	BaseURL = cfg.BaseURL
+	EventsURL = BaseURL + cfg.EventsPath
 
 	TargetRoutes = cfg.TargetRoutes
 	SampledRoutes = cfg.SampledRoutes
 }
 
-func getConfig() (*Config, error) {
+func getConfig() (*config, error) {
 	req, err := http.NewRequest("GET", "https://config.auditr.io", nil)
 	if err != nil {
 		log.Println("Error http.NewRequest:", err)
@@ -65,7 +66,7 @@ func getConfig() (*Config, error) {
 		return nil, err
 	}
 
-	cfg := Config{}
+	cfg := config{}
 	err = json.Unmarshal(body, &cfg)
 	if err != nil {
 		log.Println("Error unmarshalling body:", err)
