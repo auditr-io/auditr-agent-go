@@ -3,11 +3,13 @@ package agent
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/auditr-io/auditr-agent-go/auth"
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/segmentio/ksuid"
@@ -88,8 +90,7 @@ func (p *Publisher) sendEventBytes(event []byte) {
 	}
 
 	req.Close = true
-	req.Header.Set("Authorization", "Bearer blablabla")
-	req.Header.Set("X-Auditr-Org-ID", "1kXXAxhc0J0D7RqKjFTmq91TJ5J") // get from env
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.AccessToken))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(req)

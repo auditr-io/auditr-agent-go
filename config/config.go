@@ -3,9 +3,12 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+
+	"github.com/auditr-io/auditr-agent-go/auth"
 )
 
 var (
@@ -43,8 +46,7 @@ func getConfig() (*config, error) {
 	}
 
 	req.Close = true
-	req.Header.Set("Authorization", "Bearer token")
-	req.Header.Set("X-Auditr-Org-ID", "1kXXAxhc0J0D7RqKjFTmq91TJ5J") // get from env
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.AccessToken))
 	req.Header.Set("Content-Type", "application/json")
 
 	client := createHTTPClient()
@@ -69,7 +71,7 @@ func getConfig() (*config, error) {
 	cfg := config{}
 	err = json.Unmarshal(body, &cfg)
 	if err != nil {
-		log.Println("Error unmarshalling body:", err)
+		log.Printf("Error unmarshalling body: %v\nbody: %s", err, string(body))
 		return nil, err
 	}
 
