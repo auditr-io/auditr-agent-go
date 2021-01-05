@@ -7,10 +7,26 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/auditr-io/auditr-agent-go/auth"
+	"github.com/spf13/viper"
 )
 
+// Seed configuration
+var (
+	// ConfigURL is the seed URL to get the rest of the configuration
+	ConfigURL string
+
+	// AuthURL is the URL to authenticate the agent
+	AuthURL string
+
+	// Client credentials
+	ClientID     string
+	ClientSecret string
+)
+
+// Acquired configuration
 var (
 	BaseURL       string
 	EventsURL     string
@@ -26,20 +42,45 @@ type config struct {
 }
 
 func init() {
-	cfg, err := getConfig()
-	if err != nil {
-		log.Fatalln("Error getting config:", err)
+	viper.SetConfigType("env")
+
+	viper.BindEnv("auditr_config_url")
+	viper.BindEnv("auditr_auth_url")
+	viper.BindEnv("auditr_client_id")
+	viper.BindEnv("auditr_client_secret")
+
+	viper.SetDefault("auditr_config_url", "https://config.auditr.io")
+	viper.SetDefault("auditr_auth_url", "https://auth.auditr.io/oauth2/token")
+
+	// If a config file is available, load the env vars in it
+	if configFile, ok := os.LookupEnv("CONFIG"); ok {
+		viper.SetConfigFile(configFile)
+
+		if err := viper.ReadInConfig(); err != nil {
+			log.Printf("Error reading config file: %v\n", err)
+
+		}
 	}
 
-	BaseURL = cfg.BaseURL
-	EventsURL = BaseURL + cfg.EventsPath
+	ConfigURL = viper.GetString("auditr_config_url")
+	AuthURL = viper.GetString("auditr_auth_url")
+	ClientID = viper.GetString("auditr_client_id")
+	ClientSecret = viper.GetString("auditr_client_secret")
 
-	TargetRoutes = cfg.TargetRoutes
-	SampledRoutes = cfg.SampledRoutes
+	// cfg, err := getConfig()
+	// if err != nil {
+	// 	log.Fatalln("Error getting config:", err)
+	// }
+
+	// BaseURL = cfg.BaseURL
+	// EventsURL = BaseURL + cfg.EventsPath
+
+	// TargetRoutes = cfg.TargetRoutes
+	// SampledRoutes = cfg.SampledRoutes
 }
 
 func getConfig() (*config, error) {
-	req, err := http.NewRequest("GET", "https://config.auditr.io", nil)
+	req, err := http.NewRequest("GET", ConfigURL, nil)
 	if err != nil {
 		log.Println("Error http.NewRequest:", err)
 		return nil, err
