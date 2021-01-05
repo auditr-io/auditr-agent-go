@@ -1,29 +1,37 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 
-	"github.com/auditr-io/auditr-agent-go/auth"
 	"github.com/spf13/viper"
+	"golang.org/x/oauth2/clientcredentials"
 )
+
+// ClientProvider is a function that returns an HTTP client
+type ClientProvider func(context.Context) *http.Client
 
 // Seed configuration
 var (
 	// ConfigURL is the seed URL to get the rest of the configuration
 	ConfigURL string
 
-	// AuthURL is the URL to authenticate the agent
-	AuthURL string
+	// TokenURL is the URL to authenticate the agent
+	TokenURL string
 
 	// Client credentials
 	ClientID     string
 	ClientSecret string
+	getClient    ClientProvider = defaultClientProvider
+
+	auth *clientcredentials.Config
 )
 
 // Acquired configuration
@@ -34,6 +42,7 @@ var (
 	SampledRoutes []string
 )
 
+// config is used to unmarshal acquired configuration
 type config struct {
 	BaseURL       string   `json:"base_url"`
 	EventsPath    string   `json:"events_path"`
@@ -41,16 +50,34 @@ type config struct {
 	SampledRoutes []string `json:"sampled"`
 }
 
-func init() {
+// option is an option to override defaults
+type option func() error
+
+// withHTTPClient overrides the default HTTP client with given client
+func withHTTPClient(client ClientProvider) option {
+	return func() error {
+		getClient = client
+		return nil
+	}
+}
+
+// Init initializes the configuration before use
+func Init(options ...option) error {
+	for _, opt := range options {
+		if err := opt(); err != nil {
+			return err
+		}
+	}
+
 	viper.SetConfigType("env")
 
 	viper.BindEnv("auditr_config_url")
-	viper.BindEnv("auditr_auth_url")
+	viper.BindEnv("auditr_token_url")
 	viper.BindEnv("auditr_client_id")
 	viper.BindEnv("auditr_client_secret")
 
 	viper.SetDefault("auditr_config_url", "https://config.auditr.io")
-	viper.SetDefault("auditr_auth_url", "https://auth.auditr.io/oauth2/token")
+	viper.SetDefault("auditr_token_url", "https://auth.auditr.io/oauth2/token")
 
 	// If a config file is available, load the env vars in it
 	if configFile, ok := os.LookupEnv("CONFIG"); ok {
@@ -63,66 +90,110 @@ func init() {
 	}
 
 	ConfigURL = viper.GetString("auditr_config_url")
-	AuthURL = viper.GetString("auditr_auth_url")
+	TokenURL = viper.GetString("auditr_token_url")
 	ClientID = viper.GetString("auditr_client_id")
 	ClientSecret = viper.GetString("auditr_client_secret")
 
-	// cfg, err := getConfig()
-	// if err != nil {
-	// 	log.Fatalln("Error getting config:", err)
-	// }
+	ensureSeedConfig()
 
-	// BaseURL = cfg.BaseURL
-	// EventsURL = BaseURL + cfg.EventsPath
-
-	// TargetRoutes = cfg.TargetRoutes
-	// SampledRoutes = cfg.SampledRoutes
-}
-
-func getConfig() (*config, error) {
-	req, err := http.NewRequest("GET", ConfigURL, nil)
-	if err != nil {
-		log.Println("Error http.NewRequest:", err)
-		return nil, err
+	auth = &clientcredentials.Config{
+		ClientID:     ClientID,
+		ClientSecret: ClientSecret,
+		Scopes:       []string{"/events/write"},
+		TokenURL:     TokenURL,
 	}
 
-	req.Close = true
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.AccessToken))
+	ctx := context.Background()
+	const maxAttempts = 2
+	for i := 0; i <= maxAttempts; i++ {
+		if err := getConfig(ctx); err != nil {
+			log.Println(err)
+			if i == maxAttempts {
+				log.Fatalf("Failed to get configuration after %d attempts: %s",
+					maxAttempts,
+					err,
+				)
+			}
+			continue
+		}
+
+		break
+	}
+
+	return nil
+}
+
+// defaultClientProvider returns the default HTTP client with authorization parameters
+func defaultClientProvider(ctx context.Context) *http.Client {
+	return auth.Client(ctx)
+}
+
+// ensureSeedConfig ensures seed config is provided
+func ensureSeedConfig() {
+	if ConfigURL == "" {
+		// Should never happen due to default
+		log.Fatal("ConfigURL must be set")
+	}
+
+	if TokenURL == "" {
+		// Should never happen due to default
+		log.Fatal("TokenURL must be set")
+	}
+
+	if ClientID == "" {
+		log.Fatal("ClientID must be set using AUDITR_CLIENT_ID")
+	}
+
+	if ClientSecret == "" {
+		log.Fatal("ClientSecret must be set using AUDITR_CLIENT_SECRET")
+	}
+}
+
+// getConfig acquires configuration from the seed URL
+func getConfig(ctx context.Context) error {
+	req, err := http.NewRequest(http.MethodGet, ConfigURL, nil)
+	if err != nil {
+		log.Printf("Error creating request: %s", err)
+		return err
+	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := createHTTPClient()
-	resp, err := client.Do(req)
+	res, err := getClient(ctx).Do(req)
 	if err != nil {
-		log.Println("Error client.Do(req):", err)
-		return nil, err
+		log.Printf("Error getting config: %s", err)
+		return err
+	}
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		if err != nil {
+			log.Printf("Error reading response: %s", err)
+			return err
+		}
+
+		return fmt.Errorf("Error getting config - Status: %d, Response: %s", res.StatusCode, string(body))
 	}
 
-	if resp.Body == nil {
-		return nil, errors.New("Config body is nil")
-	}
-
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
+	var c *config
+	err = json.Unmarshal(body, &c)
 	if err != nil {
-		log.Println("Error ioutil.ReadAll(resp.Body):", err)
-		return nil, err
+		log.Printf("Error unmarshalling body - Error: %s, Body: %s", err, string(body))
+		return err
 	}
 
-	cfg := config{}
-	err = json.Unmarshal(body, &cfg)
+	BaseURL = c.BaseURL
+
+	url, err := url.Parse(c.BaseURL)
 	if err != nil {
-		log.Printf("Error unmarshalling body: %v\nbody: %s", err, string(body))
-		return nil, err
+		log.Printf("Error parsing BaseURL: %s", c.BaseURL)
+		return err
 	}
+	url.Path = path.Join(url.Path, c.EventsPath)
+	EventsURL = url.String()
 
-	return &cfg, nil
-}
+	TargetRoutes = c.TargetRoutes
+	SampledRoutes = c.SampledRoutes
 
-func createHTTPClient() *http.Client {
-	transport := &http.Transport{}
-
-	return &http.Client{
-		Transport: transport,
-	}
+	return nil
 }
