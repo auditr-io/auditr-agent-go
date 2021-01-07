@@ -16,7 +16,6 @@ type Agent struct {
 	target        *node
 	sampled       *node
 	configOptions []config.Option
-	postHooks     []PostHook
 }
 
 // Option is an option to override defaults
