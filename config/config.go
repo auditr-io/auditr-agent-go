@@ -18,6 +18,17 @@ import (
 // ClientProvider is a function that returns an HTTP client
 type ClientProvider func(context.Context) *http.Client
 
+// config is used to unmarshal acquired configuration
+type config struct {
+	BaseURL       string   `json:"base_url"`
+	EventsPath    string   `json:"events_path"`
+	TargetRoutes  []string `json:"target"`
+	SampledRoutes []string `json:"sampled"`
+}
+
+// Option is an option to override defaults
+type Option func(args ...interface{}) error
+
 // Seed configuration
 var (
 	// ConfigURL is the seed URL to get the rest of the configuration
@@ -29,8 +40,9 @@ var (
 	// Client credentials
 	ClientID     string
 	ClientSecret string
-	getClient    ClientProvider = defaultClientProvider
+	GetClient    ClientProvider = DefaultClientProvider
 
+	// auth is an OAuth2 Client Credentials client
 	auth *clientcredentials.Config
 )
 
@@ -42,27 +54,16 @@ var (
 	SampledRoutes []string
 )
 
-// config is used to unmarshal acquired configuration
-type config struct {
-	BaseURL       string   `json:"base_url"`
-	EventsPath    string   `json:"events_path"`
-	TargetRoutes  []string `json:"target"`
-	SampledRoutes []string `json:"sampled"`
-}
-
-// option is an option to override defaults
-type option func() error
-
-// withHTTPClient overrides the default HTTP client with given client
-func withHTTPClient(client ClientProvider) option {
-	return func() error {
-		getClient = client
+// WithHTTPClient overrides the default HTTP client with given client
+func WithHTTPClient(client ClientProvider) Option {
+	return func(args ...interface{}) error {
+		GetClient = client
 		return nil
 	}
 }
 
 // Init initializes the configuration before use
-func Init(options ...option) error {
+func Init(options ...Option) error {
 	for _, opt := range options {
 		if err := opt(); err != nil {
 			return err
@@ -123,8 +124,8 @@ func Init(options ...option) error {
 	return nil
 }
 
-// defaultClientProvider returns the default HTTP client with authorization parameters
-func defaultClientProvider(ctx context.Context) *http.Client {
+// DefaultClientProvider returns the default HTTP client with authorization parameters
+func DefaultClientProvider(ctx context.Context) *http.Client {
 	return auth.Client(ctx)
 }
 
@@ -158,7 +159,7 @@ func getConfig(ctx context.Context) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := getClient(ctx).Do(req)
+	res, err := GetClient(ctx).Do(req)
 	if err != nil {
 		log.Printf("Error getting config: %s", err)
 		return err

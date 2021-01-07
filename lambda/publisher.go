@@ -1,7 +1,8 @@
-package agent
+package lambda
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -93,7 +94,7 @@ func (p *Publisher) sendEventBytes(event []byte) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.AccessToken))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.client.Do(req)
+	resp, err := config.GetClient(context.Background()).Do(req)
 	if err != nil {
 		log.Println("Error client.Do(req):", err)
 		return

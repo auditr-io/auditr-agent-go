@@ -1,4 +1,4 @@
-package agent
+package lambda
 
 import (
 	"encoding/json"

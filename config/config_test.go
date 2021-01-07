@@ -75,7 +75,7 @@ func TestSeedConfig(t *testing.T) {
 	}
 
 	err := Init(
-		withHTTPClient(mockClient),
+		WithHTTPClient(mockClient),
 	)
 
 	assert.NoError(t, err)
@@ -162,7 +162,7 @@ func TestAcquiredConfig(t *testing.T) {
 	}
 
 	err := Init(
-		withHTTPClient(mockClient),
+		WithHTTPClient(mockClient),
 	)
 
 	assert.NoError(t, err)
