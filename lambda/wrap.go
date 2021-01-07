@@ -4,13 +4,83 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
-	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	awslambda "github.com/aws/aws-lambda-go/lambda"
 )
+
+var (
+	preHooks    []PreHook                       = []PreHook{}
+	postHooks   []PostHook                      = []PostHook{}
+	starterFunc func(handler awslambda.Handler) = awslambda.StartHandler
+)
+
+// PreHook is a hook that's invoked before the handler is executed
+type PreHook interface {
+
+	// BeforeExecution executes before the handler is executed
+	BeforeExecution(
+		ctx context.Context,
+		payload []byte,
+	) context.Context
+}
+
+// AddPreHook adds a pre hook to be notified after execution
+func AddPreHook(hook PreHook) {
+	preHooks = append(preHooks, hook)
+}
+
+// RemovePreHook removes a pre hook
+func RemovePreHook(hook PreHook) {
+	var hookIndex int = -1
+	for i, h := range preHooks {
+		if h == hook {
+			hookIndex = i
+			break
+		}
+	}
+
+	if hookIndex == -1 {
+		return
+	}
+
+	preHooks = append(preHooks[:hookIndex], preHooks[hookIndex+1:]...)
+}
+
+// PostHook is a hook that's invoked after the handler has executed
+type PostHook interface {
+
+	// AfterExecution executes once handler has executed
+	AfterExecution(
+		ctx context.Context,
+		payload []byte,
+		returnValue interface{},
+		err error,
+	)
+}
+
+// AddPostHook adds a post hook to be notified after execution
+func AddPostHook(hook PostHook) {
+	postHooks = append(postHooks, hook)
+}
+
+// RemovePostHook removes a post hook
+func RemovePostHook(hook PostHook) {
+	var hookIndex int = -1
+	for i, h := range postHooks {
+		if h == hook {
+			hookIndex = i
+			break
+		}
+	}
+
+	if hookIndex == -1 {
+		return
+	}
+
+	postHooks = append(postHooks[:hookIndex], postHooks[hookIndex+1:]...)
+}
 
 // lambdaFunction is old
 type lambdaFunction func(context.Context, events.APIGatewayProxyRequest) (interface{}, error)
@@ -32,6 +102,11 @@ func (handler lambdaHandler) Invoke(ctx context.Context, payload []byte) ([]byte
 	}
 
 	return responseBytes, nil
+}
+
+// Start wraps the handler and starts the AWS lambda handler
+func Start(handler interface{}) {
+	starterFunc(Wrap(handler))
 }
 
 // Wrap wraps the handler so the agent can intercept and record events
@@ -61,7 +136,7 @@ func (handler lambdaHandler) Invoke(ctx context.Context, payload []byte) ([]byte
 // See https://golang.org/pkg/encoding/json/#Unmarshal for how deserialization behaves
 //
 // TODO: return handler or interface{}?
-func (a *Agent) Wrap(handlerFunc interface{}) awslambda.Handler {
+func Wrap(handlerFunc interface{}) awslambda.Handler {
 	if handlerFunc == nil {
 		return errorHandler(fmt.Errorf("handler is nil"))
 	}
@@ -83,10 +158,11 @@ func (a *Agent) Wrap(handlerFunc interface{}) awslambda.Handler {
 
 	return lambdaHandler(
 		func(ctx context.Context, payload []byte) (interface{}, error) {
+			// TODO: run post hook on error
+			// TODO: run post hook on timeout
+
 			var args []reflect.Value
-			if takesContext {
-				args = append(args, reflect.ValueOf(ctx))
-			}
+			var eventValue reflect.Value
 
 			if (handlerType.NumIn() == 1 && !takesContext) || handlerType.NumIn() == 2 {
 				// Deserialize the last input argument and pass that on to the handler
@@ -97,7 +173,16 @@ func (a *Agent) Wrap(handlerFunc interface{}) awslambda.Handler {
 					return nil, err
 				}
 
-				args = append(args, event.Elem())
+				eventValue = event.Elem()
+			}
+
+			ctx = runPreHooks(ctx, payload)
+			if takesContext {
+				args = append(args, reflect.ValueOf(ctx))
+			}
+
+			if eventValue.IsValid() {
+				args = append(args, eventValue)
 			}
 
 			response := handler.Call(args)
@@ -119,110 +204,11 @@ func (a *Agent) Wrap(handlerFunc interface{}) awslambda.Handler {
 				val = nil
 			}
 
-			a.RunPostHooks(ctx, payload, &val, err)
+			runPostHooks(ctx, payload, &val, err)
 
 			return val, err
 		},
 	)
-}
-
-// WrapOld wraps the handler so the agent can intercept
-// and record events
-// func (a *Agent) WrapOld(handler interface{}) interface{} {
-// 	if handler == nil {
-// 		return errorHandler(fmt.Errorf("handler is nil"))
-// 	}
-
-// 	handlerType := reflect.TypeOf(handler)
-// 	handlerValue := reflect.ValueOf(handler)
-// 	takesContext, _ := validateArguments(handlerType)
-
-// 	// return func(ctx context.Context, payload json.RawMessage) (interface{}, error) {
-// 	return func(ctx context.Context, request events.APIGatewayProxyRequest) (interface{}, error) {
-// 		var args []reflect.Value
-// 		var elem reflect.Value
-
-// 		if (handlerType.NumIn() == 1 && !takesContext) || handlerType.NumIn() == 2 {
-// 			newEventType := handlerType.In(handlerType.NumIn() - 1)
-// 			newEvent := reflect.New(newEventType)
-
-// 			payload, err := json.Marshal(request)
-// 			if err != nil {
-// 				log.Println("Error marshalling request", err)
-// 				return nil, err
-// 			}
-
-// 			if err := json.Unmarshal(payload, newEvent.Interface()); err != nil {
-// 				return nil, err
-// 			}
-
-// 			elem = newEvent.Elem()
-// 			ctx = context.WithValue(ctx, eventTypeKey{}, newEventType)
-// 		}
-
-// 		if takesContext {
-// 			args = append(args, reflect.ValueOf(ctx))
-// 		}
-
-// 		if elem.IsValid() {
-// 			args = append(args, elem)
-// 		}
-
-// 		response := handlerValue.Call(args)
-
-// 		var err error
-// 		if len(response) > 0 {
-// 			if errVal, ok := response[len(response)-1].Interface().(error); ok {
-// 				err = errVal
-// 			}
-// 		}
-// 		var val interface{}
-// 		if len(response) > 1 {
-// 			val = response[0].Interface()
-// 		}
-
-// 		if err != nil {
-// 			val = nil
-// 		}
-
-// 		a.auditOrSample(request, val, err)
-
-// 		return val, err
-// 	}
-// }
-
-func (a *Agent) auditOrSample(
-	request events.APIGatewayProxyRequest,
-	val interface{},
-	err error) {
-	var route string
-	handler, _, _ := a.target.getValue(request.Path, getParams)
-	if handler != nil {
-		// route is targeted
-		route = handler()
-		a.Publisher.Publish("target", route, request, val, err)
-		log.Printf("route: %s is targeted", route)
-		return
-	}
-
-	handler, _, _ = a.sampled.getValue(request.Path, getParams)
-	if handler != nil {
-		// route is already sampled
-		log.Printf("route: %s is already sampled", handler())
-		return
-	}
-
-	// sample the new route
-	if request.Resource == "{proxy+}" {
-		route = request.Path
-	} else {
-		r := strings.NewReplacer("{", ":", "}", "")
-		route = r.Replace(request.Resource)
-	}
-
-	a.Publisher.Publish("sampled", route, request, val, err)
-	a.sampled.addRoute(route, newHandler(route))
-	log.Printf("route: %s is sampled", route)
 }
 
 // errorHandler returns a stand-in lambda function that
@@ -282,14 +268,26 @@ func validateReturns(handler reflect.Type) error {
 	return nil
 }
 
-// RunPostHooks executes all post hooks in the order they are registered
-func (a *Agent) RunPostHooks(
+// runPreHooks executes all pre hooks in the order they are registered
+func runPreHooks(
+	ctx context.Context,
+	payload []byte,
+) context.Context {
+	for _, hook := range preHooks {
+		ctx = hook.BeforeExecution(ctx, payload)
+	}
+
+	return ctx
+}
+
+// runPostHooks executes all post hooks in the order they are registered
+func runPostHooks(
 	ctx context.Context,
 	payload []byte,
 	returnValue interface{},
 	err error,
 ) {
-	for _, hook := range a.postHooks {
+	for _, hook := range postHooks {
 		hook.AfterExecution(ctx, payload, returnValue, err)
 	}
 }

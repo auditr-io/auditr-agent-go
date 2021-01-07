@@ -4,22 +4,11 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/auditr-io/auditr-agent-go/config"
+	"github.com/aws/aws-lambda-go/events"
 )
-
-type PostHook interface {
-	AfterExecution(
-		ctx context.Context,
-		payload []byte,
-		returnValue interface{},
-		err error,
-	)
-}
-
-func (a *Agent) RegisterPostHook(hook PostHook) {
-	a.postHooks = append(a.postHooks, hook)
-}
 
 // Agent is an auditr agent that collects and reports events
 type Agent struct {
@@ -36,8 +25,8 @@ type Option func(*Agent) error
 // ClientProvider is a function that returns an HTTP client
 type ClientProvider func(context.Context) *http.Client
 
-type key struct{}
-type eventTypeKey key
+// type key struct{}
+// type eventTypeKey key
 
 // Event is an audit event
 type Event struct {
@@ -138,4 +127,38 @@ func (a *Agent) Capture(
 	err error,
 ) {
 	log.Printf("Capture %#v %s %#v %s", ctx, string(payload), returnValue, err)
+}
+
+func (a *Agent) auditOrSample(
+	request events.APIGatewayProxyRequest,
+	val interface{},
+	err error) {
+	var route string
+	handler, _, _ := a.target.getValue(request.Path, getParams)
+	if handler != nil {
+		// route is targeted
+		route = handler()
+		a.Publisher.Publish("target", route, request, val, err)
+		log.Printf("route: %s is targeted", route)
+		return
+	}
+
+	handler, _, _ = a.sampled.getValue(request.Path, getParams)
+	if handler != nil {
+		// route is already sampled
+		log.Printf("route: %s is already sampled", handler())
+		return
+	}
+
+	// sample the new route
+	if request.Resource == "{proxy+}" {
+		route = request.Path
+	} else {
+		r := strings.NewReplacer("{", ":", "}", "")
+		route = r.Replace(request.Resource)
+	}
+
+	a.Publisher.Publish("sampled", route, request, val, err)
+	a.sampled.addRoute(route, newHandler(route))
+	log.Printf("route: %s is sampled", route)
 }

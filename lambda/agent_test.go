@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"testing"
 
@@ -36,6 +37,66 @@ func (m *mockTransport) successRoundTripResponse() (*http.Response, error) {
 
 type Response struct {
 	Hello string `json:"hello"`
+}
+
+func createAgent() *Agent {
+	configResponse := func() (int, []byte) {
+		cfg := struct {
+			BaseURL       string   `json:"base_url"`
+			EventsPath    string   `json:"events_path"`
+			TargetRoutes  []string `json:"target"`
+			SampledRoutes []string `json:"sampled"`
+		}{
+			BaseURL:       "https://dev-api.auditr.io/v1",
+			EventsPath:    "/events",
+			TargetRoutes:  []string{"POST /events", "PUT /events/:id"},
+			SampledRoutes: []string{"GET /events", "GET /events/:id"},
+		}
+		responseBody, _ := json.Marshal(cfg)
+		statusCode := 200
+
+		return statusCode, responseBody
+	}
+
+	m := &mockTransport{
+		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+			m.MethodCalled("RoundTrip", req)
+
+			var statusCode int
+			var responseBody []byte
+			switch req.URL.String() {
+			case config.ConfigURL:
+				statusCode, responseBody = configResponse()
+			}
+
+			r := ioutil.NopCloser(bytes.NewBuffer(responseBody))
+
+			return &http.Response{
+				StatusCode: statusCode,
+				Body:       r,
+			}, nil
+		},
+	}
+
+	m.
+		On("RoundTrip", mock.AnythingOfType("*http.Request")).
+		Return(mock.AnythingOfType("*http.Response"), nil)
+
+	mockClient := func(ctx context.Context) *http.Client {
+		return &http.Client{
+			Transport: m,
+		}
+	}
+
+	a, err := New(
+		WithHTTPClient(mockClient),
+	)
+
+	if err != nil {
+		log.Fatal("Error creating agent")
+	}
+
+	return a
 }
 
 func TestNewAgent_ReturnsAgent(t *testing.T) {

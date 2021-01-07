@@ -1,27 +1,37 @@
 package lambda
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
-	"log"
-	"net/http"
+	"os"
 	"testing"
 
-	"github.com/auditr-io/auditr-agent-go/config"
 	awslambda "github.com/aws/aws-lambda-go/lambda"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-type Person struct {
+type person struct {
 	Name string
 	Age  int
 }
 
 type recordHook struct {
 	mock.Mock
+}
+
+type contextKey string
+
+const ctxKey contextKey = "key"
+
+func (h *recordHook) BeforeExecution(
+	ctx context.Context,
+	payload []byte,
+) context.Context {
+	h.Called(ctx, payload)
+	ctx = context.WithValue(ctx, ctxKey, "value")
+
+	return ctx
 }
 
 func (h *recordHook) AfterExecution(
@@ -31,83 +41,61 @@ func (h *recordHook) AfterExecution(
 	err error,
 ) {
 	returnInterface := returnValue.(*interface{})
-	p := (*returnInterface).(*Person)
+	p := (*returnInterface).(*person)
 	h.Called(ctx, payload, p, err)
 }
 
-func createAgent() *Agent {
-	configResponse := func() (int, []byte) {
-		cfg := struct {
-			BaseURL       string   `json:"base_url"`
-			EventsPath    string   `json:"events_path"`
-			TargetRoutes  []string `json:"target"`
-			SampledRoutes []string `json:"sampled"`
-		}{
-			BaseURL:       "https://dev-api.auditr.io/v1",
-			EventsPath:    "/events",
-			TargetRoutes:  []string{"POST /events", "PUT /events/:id"},
-			SampledRoutes: []string{"GET /events", "GET /events/:id"},
-		}
-		responseBody, _ := json.Marshal(cfg)
-		statusCode := 200
-
-		return statusCode, responseBody
-	}
-
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
-			m.MethodCalled("RoundTrip", req)
-
-			var statusCode int
-			var responseBody []byte
-			switch req.URL.String() {
-			case config.ConfigURL:
-				statusCode, responseBody = configResponse()
-			}
-
-			r := ioutil.NopCloser(bytes.NewBuffer(responseBody))
-
-			return &http.Response{
-				StatusCode: statusCode,
-				Body:       r,
-			}, nil
-		},
-	}
-
-	m.
-		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-		Return(mock.AnythingOfType("*http.Response"), nil)
-
-	mockClient := func(ctx context.Context) *http.Client {
-		return &http.Client{
-			Transport: m,
-		}
-	}
-
-	a, err := New(
-		WithHTTPClient(mockClient),
-	)
-
-	if err != nil {
-		log.Fatal("Error creating agent")
-	}
-
-	return a
+type mockStarterFunc struct {
+	mock.Mock
 }
 
-func TestWrap_ReturnsInvokableHandler(t *testing.T) {
-	handler := func(ctx context.Context, e *Person) (*Person, error) {
+func (m *mockStarterFunc) StartHandler(handler awslambda.Handler) {
+	m.Called(handler)
+}
+
+func TestStart_StartsHandler(t *testing.T) {
+	handler := func(ctx context.Context, e *person) (*person, error) {
+		return e, nil
+	}
+
+	const (
+		lambdaPort       = "_LAMBDA_SERVER_PORT"
+		lambdaRuntimeAPI = "AWS_LAMBDA_RUNTIME_API"
+	)
+
+	os.Setenv(lambdaPort, "9000")
+	os.Setenv(lambdaRuntimeAPI, "localhost")
+
+	m := &mockStarterFunc{}
+	m.
+		On("StartHandler", mock.AnythingOfType("lambda.lambdaHandler")).
+		Once()
+
+	var origStarterFunc func(handler awslambda.Handler)
+	starterFunc, origStarterFunc = m.StartHandler, starterFunc
+	t.Cleanup(func() {
+		os.Unsetenv(lambdaPort)
+		os.Unsetenv(lambdaRuntimeAPI)
+		starterFunc = origStarterFunc
+	})
+
+	Start(handler)
+	assert.True(t, m.AssertExpectations(t))
+}
+
+func TestWrap_ReturnsInvocableHandler(t *testing.T) {
+	handler := func(ctx context.Context, e *person) (*person, error) {
 		return e, nil
 	}
 
 	a := createAgent()
 	assert.NotNil(t, a)
 
-	wrappedHandler := a.Wrap(handler)
+	wrappedHandler := Wrap(handler)
 	assert.IsType(t, *new(lambdaHandler), wrappedHandler)
 	assert.Implements(t, new(awslambda.Handler), wrappedHandler)
 
-	pIn := &Person{
+	pIn := &person{
 		Name: "x",
 		Age:  10,
 	}
@@ -121,13 +109,13 @@ func TestWrap_ReturnsInvokableHandler(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	var pOut *Person
+	var pOut *person
 	err = json.Unmarshal(resBytes, &pOut)
 	assert.Equal(t, pIn, pOut)
 }
 
-func TestWrap_RunsPostHook(t *testing.T) {
-	handler := func(ctx context.Context, p *Person) (*Person, error) {
+func TestWrap_RunsPreHook(t *testing.T) {
+	handler := func(ctx context.Context, p *person) (*person, error) {
 		return p, nil
 	}
 
@@ -135,13 +123,101 @@ func TestWrap_RunsPostHook(t *testing.T) {
 	assert.NotNil(t, a)
 
 	record := &recordHook{}
-	a.RegisterPostHook(record)
+	AddPreHook(record)
+	t.Cleanup(func() {
+		RemovePreHook(record)
+	})
 
-	wrappedHandler := a.Wrap(handler)
+	wrappedHandler := Wrap(handler)
 	assert.IsType(t, *new(lambdaHandler), wrappedHandler)
 	assert.Implements(t, new(awslambda.Handler), wrappedHandler)
 
-	pIn := &Person{
+	pIn := &person{
+		Name: "x",
+		Age:  10,
+	}
+	payload, err := json.Marshal(pIn)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	record.
+		On("BeforeExecution", ctx, payload).
+		Once()
+
+	awslambdaHandler := wrappedHandler.(awslambda.Handler)
+	resBytes, err := awslambdaHandler.Invoke(
+		ctx,
+		payload,
+	)
+	assert.NoError(t, err)
+
+	var pOut *person
+	err = json.Unmarshal(resBytes, &pOut)
+	assert.Equal(t, pIn, pOut)
+}
+
+func TestWrap_AppliesContextFromPreHook(t *testing.T) {
+	handler := func(ctx context.Context, p *person) (*person, error) {
+		assert.Equal(t, "value", ctx.Value(ctxKey))
+		return p, nil
+	}
+
+	a := createAgent()
+	assert.NotNil(t, a)
+
+	record := &recordHook{}
+	AddPreHook(record)
+	t.Cleanup(func() {
+		RemovePreHook(record)
+	})
+
+	wrappedHandler := Wrap(handler)
+	assert.IsType(t, *new(lambdaHandler), wrappedHandler)
+	assert.Implements(t, new(awslambda.Handler), wrappedHandler)
+
+	pIn := &person{
+		Name: "x",
+		Age:  10,
+	}
+	payload, err := json.Marshal(pIn)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	record.
+		On("BeforeExecution", ctx, payload).
+		Once()
+
+	awslambdaHandler := wrappedHandler.(awslambda.Handler)
+	resBytes, err := awslambdaHandler.Invoke(
+		ctx,
+		payload,
+	)
+	assert.NoError(t, err)
+
+	var pOut *person
+	err = json.Unmarshal(resBytes, &pOut)
+	assert.Equal(t, pIn, pOut)
+}
+
+func TestWrap_RunsPostHook(t *testing.T) {
+	handler := func(ctx context.Context, p *person) (*person, error) {
+		return p, nil
+	}
+
+	a := createAgent()
+	assert.NotNil(t, a)
+
+	record := &recordHook{}
+	AddPostHook(record)
+	t.Cleanup(func() {
+		RemovePostHook(record)
+	})
+
+	wrappedHandler := Wrap(handler)
+	assert.IsType(t, *new(lambdaHandler), wrappedHandler)
+	assert.Implements(t, new(awslambda.Handler), wrappedHandler)
+
+	pIn := &person{
 		Name: "x",
 		Age:  10,
 	}
@@ -160,7 +236,47 @@ func TestWrap_RunsPostHook(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	var pOut *Person
+	var pOut *person
 	err = json.Unmarshal(resBytes, &pOut)
 	assert.Equal(t, pIn, pOut)
+}
+
+func TestAddPreHook_AddsHook(t *testing.T) {
+	record := &recordHook{}
+
+	lenPreAdd := len(preHooks)
+	AddPreHook(record)
+	t.Cleanup(func() {
+		RemovePreHook(record)
+	})
+	assert.Equal(t, lenPreAdd+1, len(preHooks))
+}
+
+func TestRemovePreHook_RemovesHook(t *testing.T) {
+	record := &recordHook{}
+
+	AddPreHook(record)
+	lenPreRemove := len(preHooks)
+	RemovePreHook(record)
+	assert.Equal(t, lenPreRemove-1, len(preHooks))
+}
+
+func TestAddPostHook_AddsHook(t *testing.T) {
+	record := &recordHook{}
+
+	lenPreAdd := len(postHooks)
+	AddPostHook(record)
+	t.Cleanup(func() {
+		RemovePostHook(record)
+	})
+	assert.Equal(t, lenPreAdd+1, len(postHooks))
+}
+
+func TestRemovePostHook_RemovesHook(t *testing.T) {
+	record := &recordHook{}
+
+	AddPostHook(record)
+	lenPreRemove := len(postHooks)
+	RemovePostHook(record)
+	assert.Equal(t, lenPreRemove-1, len(postHooks))
 }
