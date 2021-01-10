@@ -18,12 +18,18 @@ import (
 // ClientProvider is a function that returns an HTTP client
 type ClientProvider func(context.Context) *http.Client
 
+// Route is a route used for targeting or sampling
+type Route struct {
+	HTTPMethod string `json:"method"`
+	Path       string `json:"path"`
+}
+
 // config is used to unmarshal acquired configuration
 type config struct {
-	BaseURL       string   `json:"base_url"`
-	EventsPath    string   `json:"events_path"`
-	TargetRoutes  []string `json:"target"`
-	SampledRoutes []string `json:"sampled"`
+	BaseURL       string  `json:"base_url"`
+	EventsPath    string  `json:"events_path"`
+	TargetRoutes  []Route `json:"target"`
+	SampledRoutes []Route `json:"sampled"`
 }
 
 // Option is an option to override defaults
@@ -50,8 +56,8 @@ var (
 var (
 	BaseURL       string
 	EventsURL     string
-	TargetRoutes  []string
-	SampledRoutes []string
+	TargetRoutes  []Route
+	SampledRoutes []Route
 )
 
 // WithHTTPClient overrides the default HTTP client with given client

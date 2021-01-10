@@ -2,20 +2,22 @@ package lambda
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/auditr-io/auditr-agent-go/config"
+	"github.com/auditr-io/lambdahooks-go"
 	"github.com/aws/aws-lambda-go/events"
 )
 
 // Agent is an auditr agent that collects and reports events
 type Agent struct {
-	Publisher     publisher
-	target        *node
-	sampled       *node
 	configOptions []config.Option
+	publisher     Publisher
+
+	router *Router
 }
 
 // Option is an option to override defaults
@@ -24,58 +26,26 @@ type Option func(*Agent) error
 // ClientProvider is a function that returns an HTTP client
 type ClientProvider func(context.Context) *http.Client
 
-// type key struct{}
-// type eventTypeKey key
-
 // Event is an audit event
 type Event struct {
-	ID          string      `json:"id"`
-	Action      string      `json:"action"`
-	Actor       string      `json:"actor"`
-	ActorID     string      `json:"actor_id"`
-	RouteType   string      `json:"route_type"`
-	Route       string      `json:"route"`
-	Location    string      `json:"location"`
-	RequestID   string      `json:"request_id"`
-	RequestedAt int64       `json:"requested_at"`
-	Request     interface{} `json:"request"`
-	Response    interface{} `json:"response"`
-	Error       error       `json:"error"`
-}
-
-// Handle is a function that can be registered to a route to handle HTTP
-// requests. Like http.HandlerFunc, but has a third parameter for the values of
-// wildcards (path variables).
-type Handle func() string
-
-// Param is a single URL parameter, consisting of a key and a value.
-type Param struct {
-	Key   string
-	Value string
-}
-
-// Params is a Param-slice, as returned by the router.
-// The slice is ordered, the first URL parameter is also the first slice value.
-// It is therefore safe to read values by the index.
-type Params []Param
-
-func getParams() *Params {
-	ps := make(Params, 0, 20)
-	return &ps
-}
-
-func newHandler(route string) Handle {
-	return func() string {
-		return route
-	}
+	ID          string       `json:"id"`
+	Action      string       `json:"action"`
+	Actor       string       `json:"actor"`
+	ActorID     string       `json:"actor_id"`
+	RouteType   string       `json:"route_type"`
+	Route       config.Route `json:"route"`
+	Location    string       `json:"location"`
+	RequestID   string       `json:"request_id"`
+	RequestedAt int64        `json:"requested_at"`
+	Request     interface{}  `json:"request"`
+	Response    interface{}  `json:"response"`
+	Error       interface{}  `json:"error"`
 }
 
 // New creates a new agent instance
 func New(options ...Option) (*Agent, error) {
 	a := &Agent{
-		Publisher:     newPublisher(),
-		target:        &node{},
-		sampled:       &node{},
+		publisher:     newPublisher(),
 		configOptions: []config.Option{},
 	}
 
@@ -87,12 +57,16 @@ func New(options ...Option) (*Agent, error) {
 
 	config.Init(a.configOptions...)
 
-	for _, route := range config.TargetRoutes {
-		a.target.addRoute(route, newHandler(route))
-	}
-	for _, route := range config.SampledRoutes {
-		a.sampled.addRoute(route, newHandler(route))
-	}
+	a.router = newRouter(
+		config.TargetRoutes,
+		config.SampledRoutes,
+	)
+
+	lambdahooks.Init(
+		lambdahooks.WithPostHooks(
+			a,
+		),
+	)
 
 	return a, nil
 }
@@ -108,56 +82,100 @@ func WithHTTPClient(client ClientProvider) Option {
 	}
 }
 
+// Wrap wraps a handler with audit hooks
+func (a *Agent) Wrap(handler interface{}) interface{} {
+	return lambdahooks.Wrap(handler)
+}
+
 // AfterExecution captures the request as an audit event or a sample
+// Only API Gateway events are supported at this time
 func (a *Agent) AfterExecution(
 	ctx context.Context,
 	payload []byte,
-	returnValue interface{},
-	err error,
+	newPayload []byte,
+	response interface{},
+	err interface{},
 ) {
-	log.Printf("Capture %#v %s %#v %s", ctx, string(payload), returnValue, err)
-}
-
-// Capture captures the request as an audit event or a sample
-func (a *Agent) Capture(
-	ctx context.Context,
-	payload []byte,
-	returnValue interface{},
-	err error,
-) {
-	log.Printf("Capture %#v %s %#v %s", ctx, string(payload), returnValue, err)
-}
-
-func (a *Agent) auditOrSample(
-	request events.APIGatewayProxyRequest,
-	val interface{},
-	err error) {
-	var route string
-	handler, _, _ := a.target.getValue(request.Path, getParams)
-	if handler != nil {
-		// route is targeted
-		route = handler()
-		a.Publisher.Publish("target", route, request, val, err)
-		log.Printf("route: %s is targeted", route)
+	if response == nil {
+		// API Gateway expects a non-nil response
 		return
 	}
 
-	handler, _, _ = a.sampled.getValue(request.Path, getParams)
-	if handler != nil {
-		// route is already sampled
-		log.Printf("route: %s is already sampled", handler())
+	responseInterface, ok := response.(interface{})
+	if !ok {
 		return
+	}
+
+	res, ok := (responseInterface).(events.APIGatewayProxyResponse)
+	if !ok {
+		return
+	}
+
+	var req events.APIGatewayProxyRequest
+	e := json.Unmarshal(payload, &req)
+	if e != nil {
+		log.Printf("Error unmarshalling payload: %s", string(payload))
+		return
+	}
+
+	// We only care about the original request, not the modified request
+	a.capture(ctx, req, res, err)
+}
+
+// capture captures the request as an audit event or a sample
+func (a *Agent) capture(
+	ctx context.Context,
+	req events.APIGatewayProxyRequest,
+	res events.APIGatewayProxyResponse,
+	err interface{},
+) {
+	route := config.Route{
+		HTTPMethod: req.HTTPMethod,
+		Path:       req.Path,
+	}
+
+	root, ok := a.router.target[req.HTTPMethod]
+	if ok {
+		handler, ps, _ := root.getValue(req.Path, a.router.getParams)
+		if handler != nil {
+			// route is targeted
+			if ps != nil {
+				a.router.putParams(ps)
+			}
+			// route = handler()
+			a.publisher.Publish("target", route, req, res, err)
+			log.Printf("route: %#v is targeted", route)
+			return
+		}
+	}
+
+	root, ok = a.router.sampled[req.HTTPMethod]
+	if ok {
+		handler, ps, _ := root.getValue(req.Path, a.router.getParams)
+		if handler != nil {
+			// route is already sampled
+			if ps != nil {
+				a.router.putParams(ps)
+			}
+
+			log.Printf("route: %#v is already sampled", route)
+			return
+		}
 	}
 
 	// sample the new route
-	if request.Resource == "{proxy+}" {
-		route = request.Path
-	} else {
+	root = new(node)
+	a.router.sampled[req.HTTPMethod] = root
+
+	if req.Resource != "{proxy+}" {
 		r := strings.NewReplacer("{", ":", "}", "")
-		route = r.Replace(request.Resource)
+		route = config.Route{
+			HTTPMethod: req.HTTPMethod,
+			Path:       r.Replace(req.Resource),
+		}
 	}
 
-	a.Publisher.Publish("sampled", route, request, val, err)
-	a.sampled.addRoute(route, newHandler(route))
-	log.Printf("route: %s is sampled", route)
+	a.publisher.Publish("sampled", route, req, res, err)
+	root.addRoute(route.Path, newHandler(route.Path))
+	log.Printf("route: %#v is sampled", route)
 }

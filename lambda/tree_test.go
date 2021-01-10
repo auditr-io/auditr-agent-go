@@ -22,6 +22,15 @@ import (
 // 	}
 // }
 
+// Used as a workaround since we can't compare functions or their addresses
+// var fakeHandlerValue string
+
+// func fakeHandler(val string) Handle {
+// 	return func() {
+// 		fakeHandlerValue = val
+// 	}
+// }
+
 type testRequests []struct {
 	path       string
 	nilHandler bool
@@ -29,10 +38,10 @@ type testRequests []struct {
 	ps         Params
 }
 
-// func getParams() *Params {
-// 	ps := make(Params, 0, 20)
-// 	return &ps
-// }
+func getParams() *Params {
+	ps := make(Params, 0, 20)
+	return &ps
+}
 
 func checkRequests(t *testing.T, tree *node, requests testRequests) {
 	for _, request := range requests {

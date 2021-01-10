@@ -4,46 +4,42 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
 
-	"github.com/auditr-io/auditr-agent-go/auth"
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/segmentio/ksuid"
 )
 
-type publisher interface {
+type Publisher interface {
 	// Publish creates an audit event and sends it to a listener
 	Publish(
 		routeType string,
-		route string,
+		route config.Route,
 		request events.APIGatewayProxyRequest,
-		response interface{},
-		err error)
+		response events.APIGatewayProxyResponse,
+		err interface{},
+	)
 }
 
-// Publisher facilitates the publishing of audit events to auditr
-type Publisher struct {
-	client *http.Client
-}
+// publisher facilitates the publishing of audit events to auditr
+type publisher struct{}
 
-func newPublisher() *Publisher {
-	return &Publisher{
-		client: createHTTPClient(&http.Transport{}),
-	}
+func newPublisher() *publisher {
+	return &publisher{}
 }
 
 // Publish creates an audit event and sends it to auditr
-func (p *Publisher) Publish(
+func (p *publisher) Publish(
 	routeType string,
-	route string,
+	route config.Route,
 	request events.APIGatewayProxyRequest,
-	response interface{},
-	err error) {
+	response events.APIGatewayProxyResponse,
+	err interface{},
+) {
 	event := p.buildEvent(routeType, route, request, response, err)
 
 	e, err := json.Marshal(event)
@@ -55,12 +51,13 @@ func (p *Publisher) Publish(
 	p.sendEventBytes(e)
 }
 
-func (p *Publisher) buildEvent(
+func (p *publisher) buildEvent(
 	routeType string,
-	route string,
+	route config.Route,
 	request events.APIGatewayProxyRequest,
-	response interface{},
-	err error) *Event {
+	response events.APIGatewayProxyResponse,
+	err interface{},
+) *Event {
 	event := &Event{
 		ID:          ksuid.New().String(),
 		Actor:       "user@auditr.io",
@@ -68,7 +65,7 @@ func (p *Publisher) buildEvent(
 		Action:      request.HTTPMethod,
 		Location:    request.RequestContext.Identity.SourceIP,
 		RequestID:   request.RequestContext.RequestID,
-		RequestedAt: time.Now().Unix(),
+		RequestedAt: time.Now().UTC().Unix(),
 		RouteType:   routeType,
 		Route:       route,
 		Request:     request,
@@ -83,7 +80,7 @@ func (p *Publisher) buildEvent(
 	return event
 }
 
-func (p *Publisher) sendEventBytes(event []byte) {
+func (p *publisher) sendEventBytes(event []byte) {
 	req, err := http.NewRequest("POST", config.EventsURL, bytes.NewBuffer(event))
 	if err != nil {
 		log.Println("Error http.NewRequest:", err)
@@ -91,7 +88,6 @@ func (p *Publisher) sendEventBytes(event []byte) {
 	}
 
 	req.Close = true
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.AccessToken))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := config.GetClient(context.Background()).Do(req)
@@ -109,16 +105,7 @@ func (p *Publisher) sendEventBytes(event []byte) {
 		log.Println("ioutil.ReadAll(resp.Body):", err)
 		return
 	}
+	defer resp.Body.Close()
 
 	log.Println("response Body:", string(body))
-
-	resp.Body.Close()
-}
-
-func createHTTPClient(transport http.RoundTripper) *http.Client {
-	// transport := &http.Transport{}
-
-	return &http.Client{
-		Transport: transport,
-	}
 }

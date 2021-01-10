@@ -112,15 +112,31 @@ func TestSeedConfig(t *testing.T) {
 
 func TestAcquiredConfig(t *testing.T) {
 	expected := struct {
-		BaseURL       string   `json:"base_url"`
-		EventsPath    string   `json:"events_path"`
-		TargetRoutes  []string `json:"target"`
-		SampledRoutes []string `json:"sampled"`
+		BaseURL       string  `json:"base_url"`
+		EventsPath    string  `json:"events_path"`
+		TargetRoutes  []Route `json:"target"`
+		SampledRoutes []Route `json:"sampled"`
 	}{
-		BaseURL:       "https://dev-api.auditr.io/v1",
-		EventsPath:    "/events",
-		TargetRoutes:  []string{"POST /events", "PUT /events/:id"},
-		SampledRoutes: []string{"GET /events", "GET /events/:id"},
+		BaseURL:    "https://dev-api.auditr.io/v1",
+		EventsPath: "/events",
+		TargetRoutes: []Route{
+			{
+				HTTPMethod: http.MethodPost,
+				Path:       "/events",
+			}, {
+				HTTPMethod: http.MethodPut,
+				Path:       "/events/:id",
+			},
+		},
+		SampledRoutes: []Route{
+			{
+				HTTPMethod: http.MethodGet,
+				Path:       "/events",
+			}, {
+				HTTPMethod: http.MethodGet,
+				Path:       "/events/:id",
+			},
+		},
 	}
 
 	configResponse := func() (int, []byte) {
