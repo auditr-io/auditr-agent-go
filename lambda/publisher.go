@@ -14,18 +14,19 @@ import (
 	"github.com/segmentio/ksuid"
 )
 
+// Publisher publishes events to a receiving endpoint
 type Publisher interface {
 	// Publish creates an audit event and sends it to a listener
 	Publish(
-		routeType string,
-		route config.Route,
+		routeType RouteType,
+		route *config.Route,
 		request events.APIGatewayProxyRequest,
 		response events.APIGatewayProxyResponse,
-		err interface{},
+		errorValue interface{},
 	)
 }
 
-// publisher facilitates the publishing of audit events to auditr
+// publisher publishes audit events to auditr
 type publisher struct{}
 
 func newPublisher() *publisher {
@@ -34,13 +35,13 @@ func newPublisher() *publisher {
 
 // Publish creates an audit event and sends it to auditr
 func (p *publisher) Publish(
-	routeType string,
-	route config.Route,
+	routeType RouteType,
+	route *config.Route,
 	request events.APIGatewayProxyRequest,
 	response events.APIGatewayProxyResponse,
-	err interface{},
+	errorValue interface{},
 ) {
-	event := p.buildEvent(routeType, route, request, response, err)
+	event := p.buildEvent(routeType, route, request, response, errorValue)
 
 	e, err := json.Marshal(event)
 	if err != nil {
@@ -51,12 +52,13 @@ func (p *publisher) Publish(
 	p.sendEventBytes(e)
 }
 
+// buildEvent builds an event from given parameters
 func (p *publisher) buildEvent(
-	routeType string,
-	route config.Route,
+	routeType RouteType,
+	route *config.Route,
 	request events.APIGatewayProxyRequest,
 	response events.APIGatewayProxyResponse,
-	err interface{},
+	errorValue interface{},
 ) *Event {
 	event := &Event{
 		ID:          ksuid.New().String(),
@@ -70,7 +72,7 @@ func (p *publisher) buildEvent(
 		Route:       route,
 		Request:     request,
 		Response:    response,
-		Error:       err,
+		Error:       errorValue,
 	}
 
 	if request.RequestContext.RequestTimeEpoch > 0 {

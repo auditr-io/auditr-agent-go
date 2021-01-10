@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/auditr-io/lambdahooks-go"
@@ -16,8 +15,7 @@ import (
 type Agent struct {
 	configOptions []config.Option
 	publisher     Publisher
-
-	router *Router
+	router        *Router
 }
 
 // Option is an option to override defaults
@@ -28,18 +26,18 @@ type ClientProvider func(context.Context) *http.Client
 
 // Event is an audit event
 type Event struct {
-	ID          string       `json:"id"`
-	Action      string       `json:"action"`
-	Actor       string       `json:"actor"`
-	ActorID     string       `json:"actor_id"`
-	RouteType   string       `json:"route_type"`
-	Route       config.Route `json:"route"`
-	Location    string       `json:"location"`
-	RequestID   string       `json:"request_id"`
-	RequestedAt int64        `json:"requested_at"`
-	Request     interface{}  `json:"request"`
-	Response    interface{}  `json:"response"`
-	Error       interface{}  `json:"error"`
+	ID          string        `json:"id"`
+	Action      string        `json:"action"`
+	Actor       string        `json:"actor"`
+	ActorID     string        `json:"actor_id"`
+	RouteType   RouteType     `json:"route_type"`
+	Route       *config.Route `json:"route"`
+	Location    string        `json:"location"`
+	RequestID   string        `json:"request_id"`
+	RequestedAt int64         `json:"requested_at"`
+	Request     interface{}   `json:"request"`
+	Response    interface{}   `json:"response"`
+	Error       interface{}   `json:"error"`
 }
 
 // New creates a new agent instance
@@ -94,7 +92,7 @@ func (a *Agent) AfterExecution(
 	payload []byte,
 	newPayload []byte,
 	response interface{},
-	err interface{},
+	errorValue interface{},
 ) {
 	if response == nil {
 		// API Gateway expects a non-nil response
@@ -119,7 +117,7 @@ func (a *Agent) AfterExecution(
 	}
 
 	// We only care about the original request, not the modified request
-	a.capture(ctx, req, res, err)
+	a.capture(ctx, req, res, errorValue)
 }
 
 // capture captures the request as an audit event or a sample
@@ -127,55 +125,34 @@ func (a *Agent) capture(
 	ctx context.Context,
 	req events.APIGatewayProxyRequest,
 	res events.APIGatewayProxyResponse,
-	err interface{},
+	errorValue interface{},
 ) {
-	route := config.Route{
-		HTTPMethod: req.HTTPMethod,
-		Path:       req.Path,
+	route, err := a.router.findRoute(RouteTypeTarget, req.HTTPMethod, req.Path)
+	if err != nil {
+		panic(err)
 	}
 
-	root, ok := a.router.target[req.HTTPMethod]
-	if ok {
-		handler, ps, _ := root.getValue(req.Path, a.router.getParams)
-		if handler != nil {
-			// route is targeted
-			if ps != nil {
-				a.router.putParams(ps)
-			}
-			// route = handler()
-			a.publisher.Publish("target", route, req, res, err)
-			log.Printf("route: %#v is targeted", route)
-			return
-		}
+	if route != nil {
+		a.publisher.Publish(RouteTypeTarget, route, req, res, errorValue)
+		log.Printf("route: %#v is targeted", route)
+		return
 	}
 
-	root, ok = a.router.sampled[req.HTTPMethod]
-	if ok {
-		handler, ps, _ := root.getValue(req.Path, a.router.getParams)
-		if handler != nil {
-			// route is already sampled
-			if ps != nil {
-				a.router.putParams(ps)
-			}
-
-			log.Printf("route: %#v is already sampled", route)
-			return
-		}
+	route, err = a.router.findRoute(RouteTypeSampled, req.HTTPMethod, req.Path)
+	if err != nil {
+		panic(err)
 	}
 
-	// sample the new route
-	root = new(node)
-	a.router.sampled[req.HTTPMethod] = root
-
-	if req.Resource != "{proxy+}" {
-		r := strings.NewReplacer("{", ":", "}", "")
-		route = config.Route{
-			HTTPMethod: req.HTTPMethod,
-			Path:       r.Replace(req.Resource),
-		}
+	if route != nil {
+		log.Printf("route: %#v is already sampled", route)
+		return
 	}
 
-	a.publisher.Publish("sampled", route, req, res, err)
-	root.addRoute(route.Path, newHandler(route.Path))
-	log.Printf("route: %#v is sampled", route)
+	// Sample the new route
+	route = a.router.sampleRoute(req.HTTPMethod, req.Path, req.Resource)
+	if route != nil {
+		log.Printf("route: %#v is sampled", route)
+		a.publisher.Publish(RouteTypeSampled, route, req, res, errorValue)
+		return
+	}
 }
