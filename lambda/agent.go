@@ -28,7 +28,7 @@ type ClientProvider func(context.Context) *http.Client
 type Event struct {
 	ID          string        `json:"id"`
 	Action      string        `json:"action"`
-	Actor       string        `json:"actor"`
+	Actor       *Actor        `json:"actor"`
 	ActorID     string        `json:"actor_id"`
 	RouteType   RouteType     `json:"route_type"`
 	Route       *config.Route `json:"route"`
@@ -43,7 +43,7 @@ type Event struct {
 // New creates a new agent instance
 func New(options ...Option) (*Agent, error) {
 	a := &Agent{
-		publisher:     newPublisher(),
+		publisher:     &publisher{},
 		configOptions: []config.Option{},
 	}
 
@@ -53,6 +53,7 @@ func New(options ...Option) (*Agent, error) {
 		}
 	}
 
+	// TODO: put on routine
 	config.Init(a.configOptions...)
 
 	a.router = newRouter(
@@ -104,6 +105,7 @@ func (a *Agent) AfterExecution(
 		return
 	}
 
+	// TODO: support HTTP API and Websockets
 	res, ok := (responseInterface).(events.APIGatewayProxyResponse)
 	if !ok {
 		return

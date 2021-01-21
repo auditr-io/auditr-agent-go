@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -14,13 +14,21 @@ import (
 	"github.com/segmentio/ksuid"
 )
 
+// Actor is the user originating the action
+type Actor struct {
+	ID       string `json:"actor_id"`
+	Name     string `json:"name"`
+	Username string `json:"username,omitempty"`
+	Email    string `json:"email,omitempty"`
+}
+
 // Publisher publishes events to a receiving endpoint
 type Publisher interface {
 	// Publish creates an audit event and sends it to a listener
 	Publish(
 		routeType RouteType,
 		route *config.Route,
-		request events.APIGatewayProxyRequest,
+		request events.APIGatewayProxyRequest, // TODO: adapter for other requests
 		response events.APIGatewayProxyResponse,
 		errorValue interface{},
 	)
@@ -28,10 +36,6 @@ type Publisher interface {
 
 // publisher publishes audit events to auditr
 type publisher struct{}
-
-func newPublisher() *publisher {
-	return &publisher{}
-}
 
 // Publish creates an audit event and sends it to auditr
 func (p *publisher) Publish(
@@ -41,31 +45,15 @@ func (p *publisher) Publish(
 	response events.APIGatewayProxyResponse,
 	errorValue interface{},
 ) {
-	event := p.buildEvent(routeType, route, request, response, errorValue)
+	// Map identity
+	// https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging-variables.html
+	identity := request.RequestContext.Identity
+	authorizer := request.RequestContext.Authorizer
 
-	e, err := json.Marshal(event)
-	if err != nil {
-		log.Println("Error in marshalling ", err)
-		return
-	}
-
-	p.sendEventBytes(e)
-}
-
-// buildEvent builds an event from given parameters
-func (p *publisher) buildEvent(
-	routeType RouteType,
-	route *config.Route,
-	request events.APIGatewayProxyRequest,
-	response events.APIGatewayProxyResponse,
-	errorValue interface{},
-) *Event {
 	event := &Event{
-		ID:          ksuid.New().String(),
-		Actor:       "user@auditr.io",
-		ActorID:     "6b45a096-0e41-42c0-ab71-e6ec29e23fee",
+		ID:          fmt.Sprintf("evt_%s", ksuid.New().String()),
 		Action:      request.HTTPMethod,
-		Location:    request.RequestContext.Identity.SourceIP,
+		Location:    identity.SourceIP,
 		RequestID:   request.RequestContext.RequestID,
 		RequestedAt: time.Now().UTC().Unix(),
 		RouteType:   routeType,
@@ -75,39 +63,78 @@ func (p *publisher) buildEvent(
 		Error:       errorValue,
 	}
 
+	var actor *Actor
+	// Default to cognito identity
+	// https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-with-identity-providers.html
+	if identity.CognitoIdentityID != "" {
+		// go to openid config url
+		// get userinfo endpoint
+		// get userinfo w token
+		// populate fields
+		actor = &Actor{
+			ID:       identity.CognitoIdentityID,
+			Name:     authorizer["name"].(string),
+			Username: authorizer["cognito:username"].(string),
+			Email:    authorizer["email"].(string),
+		}
+	} else {
+		// Try custom authorizer principal next
+		principalID, ok := authorizer["principalId"]
+		if ok {
+			actor = &Actor{
+				ID:       principalID.(string),
+				Username: principalID.(string),
+			}
+		} else {
+			// Finally, try IAM user
+			actor = &Actor{
+				ID:       identity.UserArn,
+				Username: identity.User,
+			}
+		}
+	}
+	event.Actor = actor
+
 	if request.RequestContext.RequestTimeEpoch > 0 {
 		event.RequestedAt = request.RequestContext.RequestTimeEpoch
 	}
 
-	return event
+	// TODO: hashSecrets
+
+	e, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("Error in marshalling %#v", err)
+		return
+	}
+
+	err = p.send(e)
+	if err != nil {
+		log.Printf("Error sending event %#v", err)
+		// TODO: retry
+		return
+	}
 }
 
-func (p *publisher) sendEventBytes(event []byte) {
-	req, err := http.NewRequest("POST", config.EventsURL, bytes.NewBuffer(event))
+func (p *publisher) send(event []byte) error {
+	method := http.MethodPost
+	req, err := http.NewRequest(method, config.EventsURL, bytes.NewBuffer(event))
 	if err != nil {
-		log.Println("Error http.NewRequest:", err)
-		return
+		log.Printf("Error creating request for %s %s: %#v", method, config.EventsURL, err)
+		return err
 	}
 
-	req.Close = true
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := config.GetClient(context.Background()).Do(req)
+	res, err := config.GetClient(context.Background()).Do(req)
 	if err != nil {
-		log.Println("Error client.Do(req):", err)
-		return
+		log.Printf("Error sending %s %s: %#v", method, config.EventsURL, err)
+		return err
 	}
 
-	if resp.Body == nil {
-		return
+	if res.StatusCode != http.StatusOK {
+		log.Printf("Error sending %s %s: %#v", method, config.EventsURL, err)
+		return err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Println("ioutil.ReadAll(resp.Body):", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	log.Println("response Body:", string(body))
+	return nil
 }

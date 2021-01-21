@@ -25,17 +25,7 @@ type mockTransport struct {
 }
 
 func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if m.fn != nil {
-		return m.fn(m, req)
-	}
-
-	return m.successRoundTripResponse()
-}
-
-func (m *mockTransport) successRoundTripResponse() (*http.Response, error) {
-	return &http.Response{
-		StatusCode: 200,
-	}, nil
+	return m.fn(m, req)
 }
 
 func TestNewAgent_ReturnsAgent(t *testing.T) {
