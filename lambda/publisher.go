@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/facebookgo/muster"
 	"github.com/segmentio/ksuid"
 )
 
@@ -34,8 +36,59 @@ type Publisher interface {
 	)
 }
 
-// publisher publishes audit events to auditr
-type publisher struct{}
+const (
+	// version of this publisher
+	version string = "0.0.1"
+
+	// max number of events in a batch
+	maxBatchSize uint = 50
+
+	// duration after which to send a pending batch
+	batchTimeout time.Duration = 100 * time.Millisecond
+
+	// how many parallel batches before we start blocking
+	maxConcurrentBatches uint = 10
+
+	// pending items to hold in the work channel before blocking
+	pendingWorkCapacity uint = 10
+)
+
+// publisher publishes audit events to auditr.
+// This batch handling implementation is shamelessly borrowed from
+// Honeycomb's libhoney.
+type publisher struct {
+	batchMaker func() muster.Batch
+	muster     *muster.Client
+	musterLock sync.RWMutex
+	responses  chan Response
+}
+
+// newPublisher creates a new publisher
+func newPublisher() (*publisher, error) {
+	p := &publisher{}
+	p.responses = make(chan Response, pendingWorkCapacity*2)
+	p.batchMaker = func() muster.Batch {
+		return newBatchList(p.responses)
+	}
+	p.muster = p.createMuster()
+	err := p.muster.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+// createMuster creates the muster client that coordinates the batch processing
+func (p *publisher) createMuster() *muster.Client {
+	m := new(muster.Client)
+	m.MaxBatchSize = maxBatchSize
+	m.BatchTimeout = batchTimeout
+	m.MaxConcurrentBatches = maxConcurrentBatches
+	m.PendingWorkCapacity = pendingWorkCapacity
+	m.BatchMaker = p.batchMaker
+	return m
+}
 
 // Publish creates an audit event and sends it to auditr
 func (p *publisher) Publish(
