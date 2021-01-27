@@ -36,40 +36,58 @@ const (
 	// version of this publisher
 	version string = "0.0.1"
 
-	// max number of events in a batch
-	maxBatchSize uint = 50
+	// DefaultMaxEventsPerBatch is the default max number of events in a batch
+	DefaultMaxEventsPerBatch uint = 50
 
-	// duration after which to send a pending batch
-	batchTimeout time.Duration = 100 * time.Millisecond
+	// DefaultSendInterval is the duration after which to send a pending batch
+	DefaultSendInterval time.Duration = 100 * time.Millisecond
 
-	// how many parallel batches before we start blocking
-	maxConcurrentBatches uint = 10
+	// DefaultMaxConcurrentBatches is how many parallel batches before we start blocking
+	DefaultMaxConcurrentBatches uint = 10
 
-	// pending items to hold in the work channel before blocking
-	pendingWorkCapacity uint = 10
+	// DefaultPendingWorkCapacity is pending items to hold in the work channel before blocking
+	DefaultPendingWorkCapacity uint = 10
 )
 
-// publisher publishes audit events to auditr.
+// EventPublisher publishes audit events to auditr.
 // This batch handling implementation is shamelessly borrowed from
 // Honeycomb's libhoney.
-type publisher struct {
+type EventPublisher struct {
 	batchMaker func() muster.Batch
 	muster     *muster.Client
 	musterLock sync.RWMutex
 	responses  chan Response
 
-	blockOnSend     bool
-	blockOnResponse bool
+	maxEventsPerBatch    uint
+	sendInterval         time.Duration
+	maxConcurrentBatches uint
+	pendingWorkCapacity  uint
+	blockOnSend          bool
+	blockOnResponse      bool
 }
 
-// newPublisher creates a new publisher
-func newPublisher() (*publisher, error) {
-	p := &publisher{
-		responses: make(chan Response, pendingWorkCapacity*2),
+// PublisherOption is an option to override defaults
+type PublisherOption func(p *EventPublisher) error
+
+// NewEventPublisher creates a new EventPublisher
+func NewEventPublisher(options ...PublisherOption) (*EventPublisher, error) {
+	p := &EventPublisher{
+		maxEventsPerBatch:    DefaultMaxEventsPerBatch,
+		sendInterval:         DefaultSendInterval,
+		maxConcurrentBatches: DefaultMaxConcurrentBatches,
+		pendingWorkCapacity:  DefaultPendingWorkCapacity,
 	}
 
+	for _, opt := range options {
+		if err := opt(p); err != nil {
+			return nil, err
+		}
+	}
+
+	p.responses = make(chan Response, p.pendingWorkCapacity*2)
+
 	p.batchMaker = func() muster.Batch {
-		b := newBatchList(p.responses)
+		b := newBatchList(p.responses, p.maxConcurrentBatches)
 		// TODO: withBlockOnResponse()
 		b.blockOnResponse = p.blockOnResponse
 		return b
@@ -83,20 +101,82 @@ func newPublisher() (*publisher, error) {
 	return p, nil
 }
 
+// WithMaxEventsPerBatch sets the max events per batch
+func WithMaxEventsPerBatch(events uint) PublisherOption {
+	return func(p *EventPublisher) error {
+		p.maxEventsPerBatch = events
+		return nil
+	}
+}
+
+// WithSendInterval sets the interval at which a batch is sent
+func WithSendInterval(interval time.Duration) PublisherOption {
+	return func(p *EventPublisher) error {
+		p.sendInterval = interval
+		return nil
+	}
+}
+
+// WithMaxConcurrentBatches sets the max concurrent batches
+func WithMaxConcurrentBatches(batches uint) PublisherOption {
+	return func(p *EventPublisher) error {
+		p.maxConcurrentBatches = batches
+		return nil
+	}
+}
+
+// WithPendingWorkCapacity sets the pending work capacity.
+// This sets the number of pending events to hold in the queue before blocking.
+func WithPendingWorkCapacity(capacity uint) PublisherOption {
+	return func(p *EventPublisher) error {
+		p.pendingWorkCapacity = capacity
+		return nil
+	}
+}
+
+// WithBlockOnResponse blocks on returning a response to the caller.
+// When set to true, be sure to read the responses. Otherwise, if the
+// channel fills up, this will block sending the events altogether.
+// Defaults to false. Unread responses are simply dropped so processing
+// continues uninterrupted.
+func WithBlockOnResponse(block bool) PublisherOption {
+	return func(p *EventPublisher) error {
+		p.blockOnResponse = block
+		return nil
+	}
+}
+
+// WithBlockOnSend blocks when sending an event if the batch is full.
+// When set to true, this will block sending the events altogether once
+// the batch fills up to pendingWorkCapacity.
+// Defaults to false. Overflowing events are simply dropped so processing
+// continues uninterrupted.
+func WithBlockOnSend(block bool) PublisherOption {
+	return func(p *EventPublisher) error {
+		p.blockOnSend = block
+		return nil
+	}
+}
+
+// Responses returns the response channel to read responses from
+func (p *EventPublisher) Responses() <-chan Response {
+	return p.responses
+}
+
 // createMuster creates the muster client that coordinates the batch processing
-func (p *publisher) createMuster() *muster.Client {
+func (p *EventPublisher) createMuster() *muster.Client {
 	m := new(muster.Client)
-	m.MaxBatchSize = maxBatchSize
-	m.BatchTimeout = batchTimeout
-	m.MaxConcurrentBatches = maxConcurrentBatches
-	m.PendingWorkCapacity = pendingWorkCapacity
+	m.MaxBatchSize = p.maxEventsPerBatch
+	m.BatchTimeout = p.sendInterval
+	m.MaxConcurrentBatches = p.maxConcurrentBatches
+	m.PendingWorkCapacity = p.pendingWorkCapacity
 	m.BatchMaker = p.batchMaker
 	return m
 }
 
-// add adds an event to the publish queue.
+// Add adds an event to the publish queue.
 // Returns true if event was added, false otherwise due to a full queue.
-func (p *publisher) add(event *Event) {
+func (p *EventPublisher) Add(event *Event) {
 	p.musterLock.RLock()
 	defer p.musterLock.RUnlock()
 
@@ -120,14 +200,13 @@ func (p *publisher) add(event *Event) {
 }
 
 // Publish creates an audit event and sends it to auditr
-func (p *publisher) Publish(
+func (p *EventPublisher) Publish(
 	routeType RouteType,
 	route *config.Route,
 	request interface{},
 	response interface{},
 	errorValue interface{},
 ) {
-
 	builder := &APIGatewayEventBuilder{}
 	event, err := builder.Build(
 		routeType,
@@ -143,7 +222,7 @@ func (p *publisher) Publish(
 		writeToChannel(p.responses, res, p.blockOnResponse)
 	}
 
-	p.add(event)
+	p.Add(event)
 }
 
 // EventBuilder builds an event from the given parameters

@@ -213,7 +213,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		p := a.publisher.(*publisher)
+		p := a.publisher.(*EventPublisher)
 		res := <-p.responses
 
 		expectedResponse := Response{
@@ -430,7 +430,7 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		p := a.publisher.(*publisher)
+		p := a.publisher.(*EventPublisher)
 		res := <-p.responses
 
 		expectedResponse := Response{

@@ -19,7 +19,7 @@ const (
 	maxEventBytes int = 100000 // 100kb
 
 	// max bytes allowed per batch
-	maxBatchBytes int = int(maxBatchSize) * maxEventBytes // 5MB
+	maxBatchBytes int = 50 * maxEventBytes // 5MB
 
 	// number of batches to hold events exceeding maxBatchBytes
 	// Overflow exceeding this will not be processed.
@@ -55,6 +55,8 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 // This batch handling implementation is shamelessly borrowed from
 // Honeycomb's libhoney.
 type batchList struct {
+	maxConcurrentBatches uint
+
 	// batches of events
 	batches map[int][]*Event
 
@@ -66,11 +68,12 @@ type batchList struct {
 }
 
 // newBatchList creates a new batch list
-func newBatchList(responses chan Response) *batchList {
+func newBatchList(responses chan Response, maxConcurrentBatches uint) *batchList {
 	b := &batchList{
-		batches:         map[int][]*Event{},
-		overflowBatches: map[int][]*Event{},
-		responses:       responses,
+		batches:              map[int][]*Event{},
+		overflowBatches:      map[int][]*Event{},
+		responses:            responses,
+		maxConcurrentBatches: maxConcurrentBatches,
 	}
 
 	return b
@@ -79,7 +82,7 @@ func newBatchList(responses chan Response) *batchList {
 // Add adds an event to a batch
 func (b *batchList) Add(event interface{}) {
 	e := event.(*Event)
-	batchID := getBatchID(e.ID)
+	batchID := b.getBatchID(e.ID)
 	b.batches[batchID] = append(b.batches[batchID], e)
 }
 
@@ -126,13 +129,13 @@ func (b *batchList) Fire(notifier muster.Notifier) {
 }
 
 // getBatchID determines the batchID given an item ID
-func getBatchID(id string) int {
+func (b *batchList) getBatchID(id string) int {
 	h := hashcode.String(id)
-	return h % int(maxConcurrentBatches)
+	return h % int(b.maxConcurrentBatches)
 }
 
 // getOverflowBatchID determines the batchID given an item ID
-func getOverflowBatchID(id string) int {
+func (b *batchList) getOverflowBatchID(id string) int {
 	h := hashcode.String(id)
 	return h % int(maxOverflowBatches)
 }
@@ -175,7 +178,7 @@ func writeToChannel(responses chan Response, res Response, block bool) bool {
 // reenqueue reenqueues events for processing
 func (b *batchList) reenqueue(events []*Event) {
 	for _, e := range events {
-		batchID := getOverflowBatchID(e.ID)
+		batchID := b.getOverflowBatchID(e.ID)
 		b.overflowBatches[batchID] = append(b.overflowBatches[batchID], e)
 	}
 }
@@ -230,7 +233,6 @@ func (b *batchList) send(events []*Event) {
 		return
 	}
 
-	// TODO: collect responses
 	var batchResponses []Response
 	err = json.NewDecoder(res.Body).Decode(&batchResponses)
 	if err != nil {

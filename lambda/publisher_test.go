@@ -166,7 +166,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		}),
 	)
 
-	p, err := newPublisher()
+	p, err := NewEventPublisher()
 	assert.NoError(t, err)
 
 	var wg sync.WaitGroup

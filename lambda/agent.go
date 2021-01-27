@@ -46,7 +46,7 @@ func New(options ...Option) (*Agent, error) {
 		configOptions: []config.Option{},
 	}
 
-	p, err := newPublisher()
+	p, err := NewEventPublisher()
 	if err != nil {
 		return nil, err
 	}

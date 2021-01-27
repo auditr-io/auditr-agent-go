@@ -23,11 +23,11 @@ func TestBatchListAdd(t *testing.T) {
 		ID: ksuid.New().String(),
 	}
 
-	r := make(chan Response, pendingWorkCapacity*2)
-	b := newBatchList(r)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	b.Add(event)
 
-	batchID := getBatchID(event.ID)
+	batchID := b.getBatchID(event.ID)
 	assert.Contains(t, b.batches[batchID], event)
 }
 
@@ -39,12 +39,12 @@ func TestReenqueue(t *testing.T) {
 		}
 	}
 
-	r := make(chan Response, pendingWorkCapacity*2)
-	b := newBatchList(r)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	b.reenqueue(events)
 
 	for _, event := range events {
-		batchID := getOverflowBatchID(event.ID)
+		batchID := b.getOverflowBatchID(event.ID)
 		assert.Contains(t, b.overflowBatches[batchID], event)
 	}
 }
@@ -141,8 +141,8 @@ func TestBatchListFire(t *testing.T) {
 		ID: ksuid.New().String(),
 	}
 
-	r := make(chan Response, pendingWorkCapacity*2)
-	b := newBatchList(r)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	b.Add(event)
 	b.Fire(n)
 
@@ -239,9 +239,9 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 	// This will cause the batch to overflow
 	event.Request = randomString(maxEventBytes - len(payloadExclReqContent))
 
-	r := make(chan Response, pendingWorkCapacity*2)
-	b := newBatchList(r)
-	for i := 0; i < int(maxBatchSize); i++ {
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
+	for i := 0; i < int(DefaultMaxEventsPerBatch); i++ {
 		b.Add(event) // same event ID fills the same batch
 	}
 
@@ -335,8 +335,8 @@ func TestSend(t *testing.T) {
 		}
 	}
 
-	r := make(chan Response, pendingWorkCapacity*2)
-	b := newBatchList(r)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	b.send(events)
 
 	assert.True(t, m.AssertExpectations(t))
@@ -430,7 +430,7 @@ func TestSend_GetResponseOnError(t *testing.T) {
 		},
 	}
 
-	r := make(chan Response, pendingWorkCapacity*2)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -439,7 +439,7 @@ func TestSend_GetResponseOnError(t *testing.T) {
 		assert.Equal(t, expectedErrRes, res)
 	}()
 
-	b := newBatchList(r)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	b.send(events)
 
 	assert.True(t, m.AssertExpectations(t))
@@ -548,7 +548,7 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 		Body:       expectedEventBody,
 	}
 
-	r := make(chan Response, pendingWorkCapacity*2)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -557,7 +557,7 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 		assert.Equal(t, expectedErr, res)
 	}()
 
-	b := newBatchList(r)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	b.send(events)
 
 	assert.True(t, m.AssertExpectations(t))
@@ -573,8 +573,8 @@ func TestEncodeJSON(t *testing.T) {
 		}
 	}
 
-	r := make(chan Response, pendingWorkCapacity*2)
-	b := newBatchList(r)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	eventsJSON, numEncoded := b.encodeJSON(events)
 	assert.Equal(t, len(events), numEncoded)
 
@@ -597,7 +597,7 @@ func TestEncodeJSON_FailsOnInvalidEvent(t *testing.T) {
 	}
 	_, expectedErr := json.Marshal(events[0])
 
-	r := make(chan Response, pendingWorkCapacity*2)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -606,7 +606,7 @@ func TestEncodeJSON_FailsOnInvalidEvent(t *testing.T) {
 		assert.Equal(t, expectedErr, res.Err)
 	}()
 
-	b := newBatchList(r)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	b.encodeJSON(events)
 
 	wg.Wait()
@@ -626,7 +626,7 @@ func TestEncodeJSON_FailsOnOversizedEvent(t *testing.T) {
 	}
 	expectedErr := fmt.Errorf("Event exceeds max size of %d bytes", maxEventBytes)
 
-	r := make(chan Response, pendingWorkCapacity*2)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -635,7 +635,7 @@ func TestEncodeJSON_FailsOnOversizedEvent(t *testing.T) {
 		assert.Equal(t, expectedErr, res.Err)
 	}()
 
-	b := newBatchList(r)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	b.encodeJSON(events)
 
 	wg.Wait()
@@ -650,17 +650,17 @@ func TestEncodeJSON_ReenqueuesOnOversizedBatch(t *testing.T) {
 	payloadExclReqContent, _ := json.Marshal(event)
 	event.Request = randomString(maxEventBytes - len(payloadExclReqContent))
 
-	events := make([]*Event, maxBatchSize)
+	events := make([]*Event, DefaultMaxEventsPerBatch)
 	for i := range events {
 		events[i] = event // same event ID fills the same batch
 	}
 
-	r := make(chan Response, pendingWorkCapacity*2)
+	r := make(chan Response, DefaultPendingWorkCapacity*2)
 
-	b := newBatchList(r)
+	b := newBatchList(r, DefaultMaxConcurrentBatches)
 	b.encodeJSON(events)
 
-	batchID := getOverflowBatchID(eventID)
+	batchID := b.getOverflowBatchID(eventID)
 	assert.Equal(t, 1, len(b.overflowBatches[batchID]))
 }
 
