@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"testing"
 
 	"github.com/auditr-io/auditr-agent-go/config"
@@ -150,6 +151,17 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 		return statusCode, responseBody
 	}
 
+	eventResponse := func() (int, []byte) {
+		statusCode := 200
+		// eventJSON, _ := json.Marshal(event)
+
+		return statusCode, []byte(`[
+			{
+				"status": 200
+			}
+		]`)
+	}
+
 	m := &mockTransport{
 		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
@@ -163,12 +175,13 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var event *Event
-				err = json.Unmarshal(reqBody, &event)
+				var eventBatch []*Event
+				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
-
+				event := eventBatch[0]
 				assert.Equal(t, RouteTypeSampled, event.RouteType)
-				statusCode = 200
+
+				statusCode, responseBody = eventResponse()
 			}
 
 			r := ioutil.NopCloser(bytes.NewBuffer(responseBody))
@@ -196,7 +209,23 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p := a.publisher.(*publisher)
+		res := <-p.responses
+
+		expectedResponse := Response{
+			StatusCode: 200,
+		}
+		assert.Equal(t, expectedResponse, res)
+	}()
+
 	a.AfterExecution(context.Background(), payload, payload, res, nil)
+
+	wg.Wait()
+
 	assert.True(t, m.AssertExpectations(t))
 }
 
@@ -339,6 +368,17 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 		return statusCode, responseBody
 	}
 
+	eventResponse := func() (int, []byte) {
+		statusCode := 200
+		// eventJSON, _ := json.Marshal(event)
+
+		return statusCode, []byte(`[
+			{
+				"status": 200
+			}
+		]`)
+	}
+
 	m := &mockTransport{
 		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
@@ -352,12 +392,13 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var event *Event
-				err = json.Unmarshal(reqBody, &event)
+				var eventBatch []*Event
+				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
-
+				event := eventBatch[0]
 				assert.Equal(t, RouteTypeTarget, event.RouteType)
-				statusCode = 200
+
+				statusCode, responseBody = eventResponse()
 			}
 
 			r := ioutil.NopCloser(bytes.NewBuffer(responseBody))
@@ -385,6 +426,22 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p := a.publisher.(*publisher)
+		res := <-p.responses
+
+		expectedResponse := Response{
+			StatusCode: 200,
+		}
+		assert.Equal(t, expectedResponse, res)
+	}()
+
 	a.AfterExecution(context.Background(), payload, payload, res, nil)
+
+	wg.Wait()
+
 	assert.True(t, m.AssertExpectations(t))
 }

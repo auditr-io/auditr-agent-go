@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -30,6 +31,24 @@ type Response struct {
 	Err        error
 	StatusCode int
 	Body       []byte
+}
+
+// UnmarshalJSON deserializes response from processing an event
+func (r *Response) UnmarshalJSON(b []byte) error {
+	res := struct {
+		Error  string
+		Status int
+	}{}
+	if err := json.Unmarshal(b, &res); err != nil {
+		return err
+	}
+
+	r.StatusCode = res.Status
+	if res.Error != "" {
+		r.Err = errors.New(res.Error)
+	}
+
+	return nil
 }
 
 // batchList is a list of batches.
@@ -138,6 +157,7 @@ func (b *batchList) enqueueResponse(res Response) {
 // If channel is full and:
 // 		* block is true, this will block
 // 		* block is false, this will drop the response
+// Returns true if event was dropped, false otherwise.
 func writeToChannel(responses chan Response, res Response, block bool) bool {
 	if block {
 		responses <- res
@@ -211,6 +231,27 @@ func (b *batchList) send(events []*Event) {
 	}
 
 	// TODO: collect responses
+	var batchResponses []Response
+	err = json.NewDecoder(res.Body).Decode(&batchResponses)
+	if err != nil {
+		b.enqueueResponseForEvents(Response{Err: err}, events)
+		return
+	}
+
+	// i := 0
+	for _, eventRes := range batchResponses {
+		// Find index of matching event for this response
+		// for i < len(events) && events[i] == nil {
+		// 	i++
+		// }
+
+		// if i >= len(events) {
+		// 	break
+		// }
+
+		b.enqueueResponse(eventRes)
+		// i++
+	}
 }
 
 // encodeJSON encodes a batch of events to JSON

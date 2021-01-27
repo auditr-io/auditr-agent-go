@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +34,10 @@ func TestPublish_PublishesEvent(t *testing.T) {
 				},
 			},
 		},
+	}
+
+	expectedResponse := Response{
+		StatusCode: 200,
 	}
 
 	type errorMessage struct {
@@ -94,7 +99,11 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		statusCode := 200
 		// eventJSON, _ := json.Marshal(event)
 
-		return statusCode, []byte("")
+		return statusCode, []byte(`[
+			{
+				"status": 200
+			}
+		]`)
 	}
 
 	m := &mockTransport{
@@ -110,9 +119,10 @@ func TestPublish_PublishesEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var event *Event
-				err = json.Unmarshal(reqBody, &event)
+				var eventBatch []*Event
+				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
+				event := eventBatch[0]
 				assert.True(t, strings.HasPrefix(event.ID, "evt_"))
 				assert.Equal(t, expectedEvent.Action, event.Action)
 				assert.Equal(t, expectedEvent.Location, event.Location)
@@ -156,7 +166,17 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		}),
 	)
 
-	p := &publisher{}
+	p, err := newPublisher()
+	assert.NoError(t, err)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		res := <-p.responses
+		assert.Equal(t, expectedResponse, res)
+	}()
+
 	p.Publish(
 		expectedEvent.RouteType,
 		expectedEvent.Route,
@@ -164,4 +184,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		expectedEvent.Response.(events.APIGatewayProxyResponse),
 		expectedEvent.Error,
 	)
+
+	wg.Wait()
+
+	assert.True(t, m.AssertExpectations(t))
 }

@@ -1,12 +1,8 @@
 package lambda
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
-	"net/http"
 	"sync"
 	"time"
 
@@ -30,8 +26,8 @@ type Publisher interface {
 	Publish(
 		routeType RouteType,
 		route *config.Route,
-		request events.APIGatewayProxyRequest, // TODO: adapter for other requests
-		response events.APIGatewayProxyResponse,
+		request interface{},
+		response interface{},
 		errorValue interface{},
 	)
 }
@@ -61,14 +57,22 @@ type publisher struct {
 	muster     *muster.Client
 	musterLock sync.RWMutex
 	responses  chan Response
+
+	blockOnSend     bool
+	blockOnResponse bool
 }
 
 // newPublisher creates a new publisher
 func newPublisher() (*publisher, error) {
-	p := &publisher{}
-	p.responses = make(chan Response, pendingWorkCapacity*2)
+	p := &publisher{
+		responses: make(chan Response, pendingWorkCapacity*2),
+	}
+
 	p.batchMaker = func() muster.Batch {
-		return newBatchList(p.responses)
+		b := newBatchList(p.responses)
+		// TODO: withBlockOnResponse()
+		b.blockOnResponse = p.blockOnResponse
+		return b
 	}
 	p.muster = p.createMuster()
 	err := p.muster.Start()
@@ -90,28 +94,100 @@ func (p *publisher) createMuster() *muster.Client {
 	return m
 }
 
+// add adds an event to the publish queue.
+// Returns true if event was added, false otherwise due to a full queue.
+func (p *publisher) add(event *Event) {
+	p.musterLock.RLock()
+	defer p.musterLock.RUnlock()
+
+	if p.blockOnSend {
+		p.muster.Work <- event
+		// Event queued successfully
+		return
+	}
+
+	select {
+	case p.muster.Work <- event:
+		// Event queued successfully
+		return
+	default:
+		// Queue is full
+		res := Response{
+			Err: errors.New("Queue overflow"),
+		}
+		writeToChannel(p.responses, res, p.blockOnResponse)
+	}
+}
+
 // Publish creates an audit event and sends it to auditr
 func (p *publisher) Publish(
 	routeType RouteType,
 	route *config.Route,
-	request events.APIGatewayProxyRequest,
-	response events.APIGatewayProxyResponse,
+	request interface{},
+	response interface{},
 	errorValue interface{},
 ) {
+
+	builder := &APIGatewayEventBuilder{}
+	event, err := builder.Build(
+		routeType,
+		route,
+		request,
+		response,
+		errorValue,
+	)
+	if err != nil {
+		res := Response{
+			Err: err,
+		}
+		writeToChannel(p.responses, res, p.blockOnResponse)
+	}
+
+	p.add(event)
+}
+
+// EventBuilder builds an event from the given parameters
+type EventBuilder interface {
+	// Build builds an event from the given parameters
+	Build(
+		routeType RouteType,
+		route *config.Route,
+		request interface{},
+		response interface{},
+		errorValue interface{},
+	) (*Event, error)
+}
+
+// APIGatewayEventBuilder builds an event from APIGateway request and response
+type APIGatewayEventBuilder struct{}
+
+// Build builds an event from APIGateway request and response
+func (b *APIGatewayEventBuilder) Build(
+	routeType RouteType,
+	route *config.Route,
+	request interface{},
+	response interface{},
+	errorValue interface{},
+) (*Event, error) {
+	req, ok := request.(events.APIGatewayProxyRequest)
+	if !ok {
+		return nil, fmt.Errorf("request is not of type APIGatewayProxyRequest")
+	}
+
 	// Map identity
 	// https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging-variables.html
-	identity := request.RequestContext.Identity
-	authorizer := request.RequestContext.Authorizer
+	identity := req.RequestContext.Identity
+	authorizer := req.RequestContext.Authorizer
 
 	event := &Event{
 		ID:          fmt.Sprintf("evt_%s", ksuid.New().String()),
-		Action:      request.HTTPMethod,
+		Action:      req.HTTPMethod,
 		Location:    identity.SourceIP,
-		RequestID:   request.RequestContext.RequestID,
+		RequestID:   req.RequestContext.RequestID,
 		RequestedAt: time.Now().UTC().Unix(),
 		RouteType:   routeType,
 		Route:       route,
-		Request:     request,
+		Request:     req,
 		Response:    response,
 		Error:       errorValue,
 	}
@@ -148,46 +224,9 @@ func (p *publisher) Publish(
 	}
 	event.Actor = actor
 
-	if request.RequestContext.RequestTimeEpoch > 0 {
-		event.RequestedAt = request.RequestContext.RequestTimeEpoch
+	if req.RequestContext.RequestTimeEpoch > 0 {
+		event.RequestedAt = req.RequestContext.RequestTimeEpoch
 	}
 
-	// TODO: hashSecrets
-
-	e, err := json.Marshal(event)
-	if err != nil {
-		log.Printf("Error in marshalling %#v", err)
-		return
-	}
-
-	err = p.send(e)
-	if err != nil {
-		log.Printf("Error sending event %#v", err)
-		// TODO: retry
-		return
-	}
-}
-
-func (p *publisher) send(event []byte) error {
-	method := http.MethodPost
-	req, err := http.NewRequest(method, config.EventsURL, bytes.NewBuffer(event))
-	if err != nil {
-		log.Printf("Error creating request for %s %s: %#v", method, config.EventsURL, err)
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	res, err := config.GetClient(context.Background()).Do(req)
-	if err != nil {
-		log.Printf("Error sending %s %s: %#v", method, config.EventsURL, err)
-		return err
-	}
-
-	if res.StatusCode != http.StatusOK {
-		log.Printf("Error sending %s %s: %#v", method, config.EventsURL, err)
-		return err
-	}
-
-	return nil
+	return event, nil
 }

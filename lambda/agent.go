@@ -43,9 +43,15 @@ type Event struct {
 // New creates a new agent instance
 func New(options ...Option) (*Agent, error) {
 	a := &Agent{
-		publisher:     &publisher{},
 		configOptions: []config.Option{},
 	}
+
+	p, err := newPublisher()
+	if err != nil {
+		return nil, err
+	}
+
+	a.publisher = p
 
 	for _, opt := range options {
 		if err := opt(a); err != nil {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"testing"
 
@@ -54,8 +53,6 @@ func TestAudit(t *testing.T) {
 	type fnType = func(context.Context, events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error)
 
 	handler := func(r events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-		log.Printf("request: %#v", r)
-
 		return expected, nil
 	}
 
