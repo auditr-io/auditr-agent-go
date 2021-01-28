@@ -1,4 +1,4 @@
-package lambda
+package collector
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/auditr-io/auditr-agent-go/config"
+	"github.com/auditr-io/auditr-agent-go/test"
 	"github.com/segmentio/ksuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -99,8 +100,8 @@ func TestBatchListFire(t *testing.T) {
 		return statusCode, []byte("")
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int
@@ -192,8 +193,8 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 		return statusCode, []byte("")
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int
@@ -293,8 +294,8 @@ func TestSend(t *testing.T) {
 		return statusCode, []byte("")
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int
@@ -380,8 +381,8 @@ func TestSend_GetResponseOnError(t *testing.T) {
 		return statusCode, cfgJSON
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int
@@ -495,8 +496,8 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 		return expectedEventStatusCode, expectedEventBody
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int

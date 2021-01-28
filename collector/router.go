@@ -1,4 +1,4 @@
-package lambda
+package collector
 
 import (
 	"fmt"
@@ -72,8 +72,8 @@ type Router struct {
 	sampled    map[string]*node
 }
 
-// newRouter creates a new router
-func newRouter(
+// NewRouter creates a new router
+func NewRouter(
 	targetRoutes []config.Route,
 	sampledRoutes []config.Route,
 ) *Router {
@@ -129,13 +129,13 @@ func (r *Router) putParams(ps *Params) {
 	}
 }
 
-// findRoute finds the matching route for a given method and path pair.
+// FindRoute finds the matching route for a given method and path pair.
 // Returns a config.Route containing the matching method and path
 // The matching path is not the same as the input path argument.
 // Example:
 // 		input path 		: "/events/123"
 // 		matching path 	: "/events/:id"
-func (r *Router) findRoute(
+func (r *Router) FindRoute(
 	routeType RouteType,
 	method string,
 	path string,
@@ -176,8 +176,8 @@ func (r *Router) findRoute(
 	return nil, nil
 }
 
-// sampleRoute adds a new route to sampled routes
-func (r *Router) sampleRoute(
+// SampleRoute adds a new route to sampled routes
+func (r *Router) SampleRoute(
 	method string,
 	path string,
 	resource string,

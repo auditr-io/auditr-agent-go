@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/auditr-io/auditr-agent-go/collector"
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/auditr-io/lambdahooks-go"
 	"github.com/aws/aws-lambda-go/events"
@@ -14,8 +15,8 @@ import (
 // Agent is an auditr agent that collects and reports events
 type Agent struct {
 	configOptions []config.Option
-	publisher     Publisher
-	router        *Router
+	publisher     collector.Publisher
+	router        *collector.Router
 }
 
 // Option is an option to override defaults
@@ -24,29 +25,13 @@ type Option func(*Agent) error
 // ClientProvider is a function that returns an HTTP client
 type ClientProvider func(context.Context) *http.Client
 
-// Event is an audit event
-type Event struct {
-	ID          string        `json:"id"`
-	Action      string        `json:"action"`
-	Actor       *Actor        `json:"actor"`
-	ActorID     string        `json:"actor_id"`
-	RouteType   RouteType     `json:"route_type"`
-	Route       *config.Route `json:"route"`
-	Location    string        `json:"location"`
-	RequestID   string        `json:"request_id"`
-	RequestedAt int64         `json:"requested_at"`
-	Request     interface{}   `json:"request"`
-	Response    interface{}   `json:"response"`
-	Error       interface{}   `json:"error"`
-}
-
 // New creates a new agent instance
 func New(options ...Option) (*Agent, error) {
 	a := &Agent{
 		configOptions: []config.Option{},
 	}
 
-	p, err := NewEventPublisher()
+	p, err := collector.NewEventPublisher()
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +47,7 @@ func New(options ...Option) (*Agent, error) {
 	// TODO: put on routine
 	config.Init(a.configOptions...)
 
-	a.router = newRouter(
+	a.router = collector.NewRouter(
 		config.TargetRoutes,
 		config.SampledRoutes,
 	)
@@ -135,18 +120,18 @@ func (a *Agent) capture(
 	res events.APIGatewayProxyResponse,
 	errorValue interface{},
 ) {
-	route, err := a.router.findRoute(RouteTypeTarget, req.HTTPMethod, req.Path)
+	route, err := a.router.FindRoute(collector.RouteTypeTarget, req.HTTPMethod, req.Path)
 	if err != nil {
 		panic(err)
 	}
 
 	if route != nil {
-		a.publisher.Publish(RouteTypeTarget, route, req, res, errorValue)
+		a.publisher.Publish(collector.RouteTypeTarget, route, req, res, errorValue)
 		log.Printf("route: %#v is targeted", route)
 		return
 	}
 
-	route, err = a.router.findRoute(RouteTypeSampled, req.HTTPMethod, req.Path)
+	route, err = a.router.FindRoute(collector.RouteTypeSampled, req.HTTPMethod, req.Path)
 	if err != nil {
 		panic(err)
 	}
@@ -157,10 +142,10 @@ func (a *Agent) capture(
 	}
 
 	// Sample the new route
-	route = a.router.sampleRoute(req.HTTPMethod, req.Path, req.Resource)
+	route = a.router.SampleRoute(req.HTTPMethod, req.Path, req.Resource)
 	if route != nil {
 		log.Printf("route: %#v is sampled", route)
-		a.publisher.Publish(RouteTypeSampled, route, req, res, errorValue)
+		a.publisher.Publish(collector.RouteTypeSampled, route, req, res, errorValue)
 		return
 	}
 }

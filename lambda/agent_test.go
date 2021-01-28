@@ -10,24 +10,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/auditr-io/auditr-agent-go/collector"
 	"github.com/auditr-io/auditr-agent-go/config"
+	"github.com/auditr-io/auditr-agent-go/test"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
-
-type roundTrip func(m *mockTransport, req *http.Request) (*http.Response, error)
-
-// mockTransport is a mock Transport client
-type mockTransport struct {
-	mock.Mock
-	http.Transport
-	fn roundTrip
-}
-
-func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	return m.fn(m, req)
-}
 
 func TestNewAgent_ReturnsAgent(t *testing.T) {
 	configResponse := func() (int, []byte) {
@@ -65,8 +54,8 @@ func TestNewAgent_ReturnsAgent(t *testing.T) {
 		return statusCode, responseBody
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int
@@ -162,8 +151,8 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 		]`)
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int
@@ -175,11 +164,11 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var eventBatch []*Event
+				var eventBatch []*collector.Event
 				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
 				event := eventBatch[0]
-				assert.Equal(t, RouteTypeSampled, event.RouteType)
+				assert.Equal(t, collector.RouteTypeSampled, event.RouteType)
 
 				statusCode, responseBody = eventResponse()
 			}
@@ -213,10 +202,10 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		p := a.publisher.(*EventPublisher)
-		res := <-p.responses
+		p := a.publisher.(*collector.EventPublisher)
+		res := <-p.Responses()
 
-		expectedResponse := Response{
+		expectedResponse := collector.Response{
 			StatusCode: 200,
 		}
 		assert.Equal(t, expectedResponse, res)
@@ -277,8 +266,8 @@ func TestAfterExecution_SkipsSampledAPIGatewayEvent(t *testing.T) {
 		return statusCode, responseBody
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int
@@ -379,8 +368,8 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 		]`)
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int
@@ -392,11 +381,11 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var eventBatch []*Event
+				var eventBatch []*collector.Event
 				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
 				event := eventBatch[0]
-				assert.Equal(t, RouteTypeTarget, event.RouteType)
+				assert.Equal(t, collector.RouteTypeTarget, event.RouteType)
 
 				statusCode, responseBody = eventResponse()
 			}
@@ -430,10 +419,10 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		p := a.publisher.(*EventPublisher)
-		res := <-p.responses
+		p := a.publisher.(*collector.EventPublisher)
+		res := <-p.Responses()
 
-		expectedResponse := Response{
+		expectedResponse := collector.Response{
 			StatusCode: 200,
 		}
 		assert.Equal(t, expectedResponse, res)

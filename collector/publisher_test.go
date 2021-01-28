@@ -1,4 +1,4 @@
-package lambda
+package collector
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/auditr-io/auditr-agent-go/config"
+	"github.com/auditr-io/auditr-agent-go/test"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/stretchr/testify/mock"
 )
@@ -106,8 +107,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		]`)
 	}
 
-	m := &mockTransport{
-		fn: func(m *mockTransport, req *http.Request) (*http.Response, error) {
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
 
 			var statusCode int
