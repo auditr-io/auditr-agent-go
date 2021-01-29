@@ -20,6 +20,28 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+type mockBuilder struct {
+	mock.Mock
+	fn func(
+		m *mockBuilder,
+		routeType RouteType,
+		route *config.Route,
+		request interface{},
+		response interface{},
+		errorValue interface{},
+	) (*Event, error)
+}
+
+func (m *mockBuilder) Build(
+	routeType RouteType,
+	route *config.Route,
+	request interface{},
+	response interface{},
+	errorValue interface{},
+) (*Event, error) {
+	return m.fn(m, routeType, route, request, response, errorValue)
+}
+
 func TestPublish_PublishesEvent(t *testing.T) {
 	expectedRequest := events.APIGatewayProxyRequest{
 		HTTPMethod: http.MethodGet,
@@ -167,7 +189,41 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		}),
 	)
 
-	p, err := NewEventPublisher()
+	b := &mockBuilder{
+		fn: func(
+			m *mockBuilder,
+			routeType RouteType,
+			route *config.Route,
+			request interface{},
+			response interface{},
+			errorValue interface{},
+		) (*Event, error) {
+			m.MethodCalled(
+				"Build",
+				routeType,
+				route,
+				request,
+				response,
+				errorValue,
+			)
+
+			e := expectedEvent
+			e.ID = "evt_xxxxx"
+
+			return e, nil
+		},
+	}
+
+	b.On(
+		"Build",
+		expectedEvent.RouteType,
+		expectedEvent.Route,
+		expectedEvent.Request.(events.APIGatewayProxyRequest),
+		expectedEvent.Response.(events.APIGatewayProxyResponse),
+		expectedEvent.Error,
+	).Return(expectedEvent, nil).Once()
+
+	p, err := NewEventPublisher([]EventBuilder{b})
 	assert.NoError(t, err)
 
 	var wg sync.WaitGroup
@@ -189,4 +245,5 @@ func TestPublish_PublishesEvent(t *testing.T) {
 	wg.Wait()
 
 	assert.True(t, m.AssertExpectations(t))
+	assert.True(t, b.AssertExpectations(t))
 }

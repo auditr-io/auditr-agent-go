@@ -1,0 +1,84 @@
+package lambda
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/auditr-io/auditr-agent-go/collector"
+	"github.com/auditr-io/auditr-agent-go/config"
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/segmentio/ksuid"
+)
+
+// APIGatewayEventBuilder builds an event from APIGateway request and response
+type APIGatewayEventBuilder struct{}
+
+// Build builds an event from APIGateway request and response
+func (b *APIGatewayEventBuilder) Build(
+	routeType collector.RouteType,
+	route *config.Route,
+	request interface{},
+	response interface{},
+	errorValue interface{},
+) (*collector.Event, error) {
+	req, ok := request.(events.APIGatewayProxyRequest)
+	if !ok {
+		return nil, fmt.Errorf("request is not of type APIGatewayProxyRequest")
+	}
+
+	// Map identity
+	// https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging-variables.html
+	identity := req.RequestContext.Identity
+	authorizer := req.RequestContext.Authorizer
+
+	event := &collector.Event{
+		ID:          fmt.Sprintf("evt_%s", ksuid.New().String()),
+		Action:      req.HTTPMethod,
+		Location:    identity.SourceIP,
+		RequestID:   req.RequestContext.RequestID,
+		RequestedAt: time.Now().UTC().Unix(),
+		RouteType:   routeType,
+		Route:       route,
+		Request:     req,
+		Response:    response,
+		Error:       errorValue,
+	}
+
+	var actor *collector.Actor
+	// Default to cognito identity
+	// https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-with-identity-providers.html
+	if identity.CognitoIdentityID != "" {
+		// go to openid config url
+		// get userinfo endpoint
+		// get userinfo w token
+		// populate fields
+		actor = &collector.Actor{
+			ID:       identity.CognitoIdentityID,
+			Name:     authorizer["name"].(string),
+			Username: authorizer["cognito:username"].(string),
+			Email:    authorizer["email"].(string),
+		}
+	} else {
+		// Try custom authorizer principal next
+		principalID, ok := authorizer["principalId"]
+		if ok {
+			actor = &collector.Actor{
+				ID:       principalID.(string),
+				Username: principalID.(string),
+			}
+		} else {
+			// Finally, try IAM user
+			actor = &collector.Actor{
+				ID:       identity.UserArn,
+				Username: identity.User,
+			}
+		}
+	}
+	event.Actor = actor
+
+	if req.RequestContext.RequestTimeEpoch > 0 {
+		event.RequestedAt = req.RequestContext.RequestTimeEpoch
+	}
+
+	return event, nil
+}

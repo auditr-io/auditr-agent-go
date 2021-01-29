@@ -19,19 +19,23 @@ type Agent struct {
 	router        *collector.Router
 }
 
-// Option is an option to override defaults
-type Option func(*Agent) error
+// AgentOption is an option to override defaults
+type AgentOption func(*Agent) error
 
 // ClientProvider is a function that returns an HTTP client
 type ClientProvider func(context.Context) *http.Client
 
-// New creates a new agent instance
-func New(options ...Option) (*Agent, error) {
+// NewAgent creates a new agent instance
+func NewAgent(options ...AgentOption) (*Agent, error) {
 	a := &Agent{
 		configOptions: []config.Option{},
 	}
 
-	p, err := collector.NewEventPublisher()
+	b := []collector.EventBuilder{
+		&APIGatewayEventBuilder{},
+	}
+
+	p, err := collector.NewEventPublisher(b)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +66,7 @@ func New(options ...Option) (*Agent, error) {
 }
 
 // WithHTTPClient overrides the default HTTP client with given client
-func WithHTTPClient(client ClientProvider) Option {
+func WithHTTPClient(client ClientProvider) AgentOption {
 	return func(a *Agent) error {
 		a.configOptions = append(
 			a.configOptions,

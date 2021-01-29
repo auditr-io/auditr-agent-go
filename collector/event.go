@@ -17,3 +17,11 @@ type Event struct {
 	Response    interface{}   `json:"response"`
 	Error       interface{}   `json:"error"`
 }
+
+// Actor is the user originating the action
+type Actor struct {
+	ID       string `json:"actor_id"`
+	Name     string `json:"name"`
+	Username string `json:"username,omitempty"`
+	Email    string `json:"email,omitempty"`
+}

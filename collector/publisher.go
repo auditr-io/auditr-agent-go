@@ -7,18 +7,8 @@ import (
 	"time"
 
 	"github.com/auditr-io/auditr-agent-go/config"
-	"github.com/aws/aws-lambda-go/events"
 	"github.com/facebookgo/muster"
-	"github.com/segmentio/ksuid"
 )
-
-// Actor is the user originating the action
-type Actor struct {
-	ID       string `json:"actor_id"`
-	Name     string `json:"name"`
-	Username string `json:"username,omitempty"`
-	Email    string `json:"email,omitempty"`
-}
 
 // Publisher publishes events to a receiving endpoint
 type Publisher interface {
@@ -53,25 +43,33 @@ const (
 // This batch handling implementation is shamelessly borrowed from
 // Honeycomb's libhoney.
 type EventPublisher struct {
-	batchMaker func() muster.Batch
-	muster     *muster.Client
-	musterLock sync.RWMutex
-	responses  chan Response
-
 	maxEventsPerBatch    uint
 	sendInterval         time.Duration
 	maxConcurrentBatches uint
 	pendingWorkCapacity  uint
 	blockOnSend          bool
 	blockOnResponse      bool
+
+	eventBuilders []EventBuilder
+	batchMaker    func() muster.Batch
+	muster        *muster.Client
+	musterLock    sync.RWMutex
+	responses     chan Response
 }
 
 // PublisherOption is an option to override defaults
 type PublisherOption func(p *EventPublisher) error
 
-// NewEventPublisher creates a new EventPublisher
-func NewEventPublisher(options ...PublisherOption) (*EventPublisher, error) {
+// NewEventPublisher creates a new EventPublisher.
+// A list of event builders is required to map the parameters
+// to an Event. The event builders are evaluated in order and
+// stops at the first builder that successfully maps to an Event.
+func NewEventPublisher(
+	eventBuilders []EventBuilder,
+	options ...PublisherOption,
+) (*EventPublisher, error) {
 	p := &EventPublisher{
+		eventBuilders:        eventBuilders,
 		maxEventsPerBatch:    DefaultMaxEventsPerBatch,
 		sendInterval:         DefaultSendInterval,
 		maxConcurrentBatches: DefaultMaxConcurrentBatches,
@@ -199,7 +197,9 @@ func (p *EventPublisher) Add(event *Event) {
 	}
 }
 
-// Publish creates an audit event and sends it to auditr
+// Publish creates an audit event and sends it to auditr.
+// The event builders are evaluated in order and
+// stops at the first builder that successfully maps to an Event.
 func (p *EventPublisher) Publish(
 	routeType RouteType,
 	route *config.Route,
@@ -207,105 +207,28 @@ func (p *EventPublisher) Publish(
 	response interface{},
 	errorValue interface{},
 ) {
-	builder := &APIGatewayEventBuilder{}
-	event, err := builder.Build(
-		routeType,
-		route,
-		request,
-		response,
-		errorValue,
-	)
-	if err != nil {
-		res := Response{
-			Err: err,
+	for _, b := range p.eventBuilders {
+		event, err := b.Build(
+			routeType,
+			route,
+			request,
+			response,
+			errorValue,
+		)
+
+		if err != nil {
+			// Builder couldn't build event. Move to the next builder.
+			continue
 		}
-		writeToChannel(p.responses, res, p.blockOnResponse)
-	}
 
-	p.Add(event)
-}
-
-// EventBuilder builds an event from the given parameters
-type EventBuilder interface {
-	// Build builds an event from the given parameters
-	Build(
-		routeType RouteType,
-		route *config.Route,
-		request interface{},
-		response interface{},
-		errorValue interface{},
-	) (*Event, error)
-}
-
-// APIGatewayEventBuilder builds an event from APIGateway request and response
-type APIGatewayEventBuilder struct{}
-
-// Build builds an event from APIGateway request and response
-func (b *APIGatewayEventBuilder) Build(
-	routeType RouteType,
-	route *config.Route,
-	request interface{},
-	response interface{},
-	errorValue interface{},
-) (*Event, error) {
-	req, ok := request.(events.APIGatewayProxyRequest)
-	if !ok {
-		return nil, fmt.Errorf("request is not of type APIGatewayProxyRequest")
-	}
-
-	// Map identity
-	// https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging-variables.html
-	identity := req.RequestContext.Identity
-	authorizer := req.RequestContext.Authorizer
-
-	event := &Event{
-		ID:          fmt.Sprintf("evt_%s", ksuid.New().String()),
-		Action:      req.HTTPMethod,
-		Location:    identity.SourceIP,
-		RequestID:   req.RequestContext.RequestID,
-		RequestedAt: time.Now().UTC().Unix(),
-		RouteType:   routeType,
-		Route:       route,
-		Request:     req,
-		Response:    response,
-		Error:       errorValue,
-	}
-
-	var actor *Actor
-	// Default to cognito identity
-	// https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-with-identity-providers.html
-	if identity.CognitoIdentityID != "" {
-		// go to openid config url
-		// get userinfo endpoint
-		// get userinfo w token
-		// populate fields
-		actor = &Actor{
-			ID:       identity.CognitoIdentityID,
-			Name:     authorizer["name"].(string),
-			Username: authorizer["cognito:username"].(string),
-			Email:    authorizer["email"].(string),
-		}
-	} else {
-		// Try custom authorizer principal next
-		principalID, ok := authorizer["principalId"]
-		if ok {
-			actor = &Actor{
-				ID:       principalID.(string),
-				Username: principalID.(string),
-			}
-		} else {
-			// Finally, try IAM user
-			actor = &Actor{
-				ID:       identity.UserArn,
-				Username: identity.User,
-			}
+		if event != nil {
+			p.Add(event)
+			return
 		}
 	}
-	event.Actor = actor
 
-	if req.RequestContext.RequestTimeEpoch > 0 {
-		event.RequestedAt = req.RequestContext.RequestTimeEpoch
+	res := Response{
+		Err: fmt.Errorf("Unable to build event"),
 	}
-
-	return event, nil
+	writeToChannel(p.responses, res, p.blockOnResponse)
 }
