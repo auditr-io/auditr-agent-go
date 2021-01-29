@@ -589,7 +589,7 @@ func TestEncodeJSON_FailsOnInvalidEvent(t *testing.T) {
 	}
 
 	events := []*Event{
-		&Event{
+		{
 			ID: ksuid.New().String(),
 			Request: unmarshallable{
 				Fn: func() {},
