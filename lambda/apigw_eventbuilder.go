@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/auditr-io/auditr-agent-go/collector"
+	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/segmentio/ksuid"
@@ -15,12 +15,12 @@ type APIGatewayEventBuilder struct{}
 
 // Build builds an event from APIGateway request and response
 func (b *APIGatewayEventBuilder) Build(
-	routeType collector.RouteType,
+	routeType collect.RouteType,
 	route *config.Route,
 	request interface{},
 	response interface{},
 	errorValue interface{},
-) (*collector.Event, error) {
+) (*collect.Event, error) {
 	req, ok := request.(events.APIGatewayProxyRequest)
 	if !ok {
 		return nil, fmt.Errorf("request is not of type APIGatewayProxyRequest")
@@ -31,7 +31,7 @@ func (b *APIGatewayEventBuilder) Build(
 	identity := req.RequestContext.Identity
 	authorizer := req.RequestContext.Authorizer
 
-	event := &collector.Event{
+	event := &collect.Event{
 		ID:          fmt.Sprintf("evt_%s", ksuid.New().String()),
 		Action:      req.HTTPMethod,
 		Location:    identity.SourceIP,
@@ -44,7 +44,7 @@ func (b *APIGatewayEventBuilder) Build(
 		Error:       errorValue,
 	}
 
-	var actor *collector.Actor
+	var actor *collect.Actor
 	// Default to cognito identity
 	// https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-with-identity-providers.html
 	if identity.CognitoIdentityID != "" {
@@ -52,7 +52,7 @@ func (b *APIGatewayEventBuilder) Build(
 		// get userinfo endpoint
 		// get userinfo w token
 		// populate fields
-		actor = &collector.Actor{
+		actor = &collect.Actor{
 			ID:       identity.CognitoIdentityID,
 			Name:     authorizer["name"].(string),
 			Username: authorizer["cognito:username"].(string),
@@ -62,13 +62,13 @@ func (b *APIGatewayEventBuilder) Build(
 		// Try custom authorizer principal next
 		principalID, ok := authorizer["principalId"]
 		if ok {
-			actor = &collector.Actor{
+			actor = &collect.Actor{
 				ID:       principalID.(string),
 				Username: principalID.(string),
 			}
 		} else {
 			// Finally, try IAM user
-			actor = &collector.Actor{
+			actor = &collect.Actor{
 				ID:       identity.UserArn,
 				Username: identity.User,
 			}

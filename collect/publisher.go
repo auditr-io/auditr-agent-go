@@ -1,4 +1,4 @@
-package collector
+package collect
 
 import (
 	"errors"

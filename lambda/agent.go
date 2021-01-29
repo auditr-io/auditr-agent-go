@@ -4,57 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"net/http"
 
-	"github.com/auditr-io/auditr-agent-go/collector"
-	"github.com/auditr-io/auditr-agent-go/config"
+	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/lambdahooks-go"
 	"github.com/aws/aws-lambda-go/events"
 )
 
 // Agent is an auditr agent that collects and reports events
 type Agent struct {
-	configOptions []config.ConfigOption
-	publisher     collector.Publisher
-	router        *collector.Router
+	collector *collect.Collector
 }
 
-// AgentOption is an option to override defaults
-type AgentOption func(*Agent) error
-
-// ClientProvider is a function that returns an HTTP client
-type ClientProvider func(context.Context) *http.Client
-
 // NewAgent creates a new agent instance
-func NewAgent(options ...AgentOption) (*Agent, error) {
-	a := &Agent{
-		configOptions: []config.ConfigOption{},
-	}
+func NewAgent(options ...collect.CollectorOption) (*Agent, error) {
+	a := &Agent{}
 
-	b := []collector.EventBuilder{
-		&APIGatewayEventBuilder{},
-	}
-
-	p, err := collector.NewEventPublisher(b)
+	c, err := collect.NewCollector(
+		[]collect.EventBuilder{
+			&APIGatewayEventBuilder{},
+		},
+		options...,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	a.publisher = p
-
-	for _, opt := range options {
-		if err := opt(a); err != nil {
-			return nil, err
-		}
-	}
-
-	// TODO: put on routine
-	config.Init(a.configOptions...)
-
-	a.router = collector.NewRouter(
-		config.TargetRoutes,
-		config.SampledRoutes,
-	)
+	a.collector = c
 
 	lambdahooks.Init(
 		lambdahooks.WithPostHooks(
@@ -63,17 +38,6 @@ func NewAgent(options ...AgentOption) (*Agent, error) {
 	)
 
 	return a, nil
-}
-
-// WithHTTPClient overrides the default HTTP client with given client
-func WithHTTPClient(client ClientProvider) AgentOption {
-	return func(a *Agent) error {
-		a.configOptions = append(
-			a.configOptions,
-			config.WithHTTPClient(config.ClientProvider(client)),
-		)
-		return nil
-	}
 }
 
 // Wrap wraps a handler with audit hooks
@@ -95,61 +59,28 @@ func (a *Agent) AfterExecution(
 		return
 	}
 
-	responseInterface, ok := response.(interface{})
-	if !ok {
-		return
-	}
-
 	// TODO: support HTTP API and Websockets
-	res, ok := (responseInterface).(events.APIGatewayProxyResponse)
+	_, ok := response.(events.APIGatewayProxyResponse)
 	if !ok {
 		return
 	}
 
 	var req events.APIGatewayProxyRequest
-	e := json.Unmarshal(payload, &req)
-	if e != nil {
+	// We only care about the original request, not the modified request.
+	// So, we use payload here.
+	err := json.Unmarshal(payload, &req)
+	if err != nil {
 		log.Printf("Error unmarshalling payload: %s", string(payload))
 		return
 	}
 
-	// We only care about the original request, not the modified request
-	a.capture(ctx, req, res, errorValue)
-}
-
-// capture captures the request as an audit event or a sample
-func (a *Agent) capture(
-	ctx context.Context,
-	req events.APIGatewayProxyRequest,
-	res events.APIGatewayProxyResponse,
-	errorValue interface{},
-) {
-	route, err := a.router.FindRoute(collector.RouteTypeTarget, req.HTTPMethod, req.Path)
-	if err != nil {
-		panic(err)
-	}
-
-	if route != nil {
-		a.publisher.Publish(collector.RouteTypeTarget, route, req, res, errorValue)
-		log.Printf("route: %#v is targeted", route)
-		return
-	}
-
-	route, err = a.router.FindRoute(collector.RouteTypeSampled, req.HTTPMethod, req.Path)
-	if err != nil {
-		panic(err)
-	}
-
-	if route != nil {
-		log.Printf("route: %#v is already sampled", route)
-		return
-	}
-
-	// Sample the new route
-	route = a.router.SampleRoute(req.HTTPMethod, req.Path, req.Resource)
-	if route != nil {
-		log.Printf("route: %#v is sampled", route)
-		a.publisher.Publish(collector.RouteTypeSampled, route, req, res, errorValue)
-		return
-	}
+	a.collector.Collect(
+		ctx,
+		req.HTTPMethod,
+		req.Path,
+		req.Resource,
+		req,
+		response,
+		errorValue,
+	)
 }

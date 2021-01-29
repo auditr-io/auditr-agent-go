@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/auditr-io/auditr-agent-go/collector"
+	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/auditr-io/auditr-agent-go/test"
 	"github.com/aws/aws-lambda-go/events"
@@ -85,7 +85,7 @@ func TestNewAgent_ReturnsAgent(t *testing.T) {
 	}
 
 	a, err := NewAgent(
-		WithHTTPClient(mockClient),
+		collect.WithHTTPClient(mockClient),
 	)
 	assert.NoError(t, err)
 	assert.NotNil(t, a)
@@ -164,11 +164,11 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var eventBatch []*collector.Event
+				var eventBatch []*collect.Event
 				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
 				event := eventBatch[0]
-				assert.Equal(t, collector.RouteTypeSampled, event.RouteType)
+				assert.Equal(t, collect.RouteTypeSampled, event.RouteType)
 
 				statusCode, responseBody = eventResponse()
 			}
@@ -194,7 +194,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 	}
 
 	a, err := NewAgent(
-		WithHTTPClient(mockClient),
+		collect.WithHTTPClient(mockClient),
 	)
 	assert.NoError(t, err)
 
@@ -202,10 +202,9 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		p := a.publisher.(*collector.EventPublisher)
-		res := <-p.Responses()
+		res := <-a.collector.Responses()
 
-		expectedResponse := collector.Response{
+		expectedResponse := collect.Response{
 			StatusCode: 200,
 		}
 		assert.Equal(t, expectedResponse, res)
@@ -298,7 +297,7 @@ func TestAfterExecution_SkipsSampledAPIGatewayEvent(t *testing.T) {
 	}
 
 	a, err := NewAgent(
-		WithHTTPClient(mockClient),
+		collect.WithHTTPClient(mockClient),
 	)
 	assert.NoError(t, err)
 
@@ -381,11 +380,11 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var eventBatch []*collector.Event
+				var eventBatch []*collect.Event
 				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
 				event := eventBatch[0]
-				assert.Equal(t, collector.RouteTypeTarget, event.RouteType)
+				assert.Equal(t, collect.RouteTypeTarget, event.RouteType)
 
 				statusCode, responseBody = eventResponse()
 			}
@@ -411,7 +410,7 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 	}
 
 	a, err := NewAgent(
-		WithHTTPClient(mockClient),
+		collect.WithHTTPClient(mockClient),
 	)
 	assert.NoError(t, err)
 
@@ -419,10 +418,9 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		p := a.publisher.(*collector.EventPublisher)
-		res := <-p.Responses()
+		res := <-a.collector.Responses()
 
-		expectedResponse := collector.Response{
+		expectedResponse := collect.Response{
 			StatusCode: 200,
 		}
 		assert.Equal(t, expectedResponse, res)

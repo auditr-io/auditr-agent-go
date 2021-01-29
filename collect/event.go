@@ -1,4 +1,4 @@
-package collector
+package collect
 
 import "github.com/auditr-io/auditr-agent-go/config"
 
