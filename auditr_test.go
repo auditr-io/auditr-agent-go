@@ -117,7 +117,7 @@ func TestAudit(t *testing.T) {
 		}
 	}
 
-	agentInstance, _ = lambda.New(
+	agentInstance, _ = lambda.NewAgent(
 		lambda.WithHTTPClient(mockClient),
 	)
 	wrappedHandler := Audit(handler).(awslambda.Handler)

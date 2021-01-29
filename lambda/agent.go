@@ -14,7 +14,7 @@ import (
 
 // Agent is an auditr agent that collects and reports events
 type Agent struct {
-	configOptions []config.Option
+	configOptions []config.ConfigOption
 	publisher     collector.Publisher
 	router        *collector.Router
 }
@@ -28,7 +28,7 @@ type ClientProvider func(context.Context) *http.Client
 // NewAgent creates a new agent instance
 func NewAgent(options ...AgentOption) (*Agent, error) {
 	a := &Agent{
-		configOptions: []config.Option{},
+		configOptions: []config.ConfigOption{},
 	}
 
 	b := []collector.EventBuilder{

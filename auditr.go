@@ -28,5 +28,5 @@ func init() {
 		return
 	}
 
-	agentInstance, _ = lambda.New()
+	agentInstance, _ = lambda.NewAgent()
 }

@@ -32,8 +32,8 @@ type config struct {
 	SampledRoutes []Route `json:"sampled"`
 }
 
-// Option is an option to override defaults
-type Option func(args ...interface{}) error
+// ConfigOption is an option to override defaults
+type ConfigOption func(args ...interface{}) error
 
 // Seed configuration
 var (
@@ -61,7 +61,7 @@ var (
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
-func WithHTTPClient(client ClientProvider) Option {
+func WithHTTPClient(client ClientProvider) ConfigOption {
 	return func(args ...interface{}) error {
 		GetClient = client
 		return nil
@@ -69,7 +69,7 @@ func WithHTTPClient(client ClientProvider) Option {
 }
 
 // Init initializes the configuration before use
-func Init(options ...Option) error {
+func Init(options ...ConfigOption) error {
 	for _, opt := range options {
 		if err := opt(); err != nil {
 			return err
