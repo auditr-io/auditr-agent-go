@@ -109,3 +109,8 @@ func (a *Agent) Collect(
 func (a *Agent) Flush() error {
 	return a.collector.Flush()
 }
+
+// Responses return a response channel
+func (a *Agent) Responses() <-chan collect.Response {
+	return a.collector.Responses()
+}
