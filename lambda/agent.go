@@ -45,9 +45,27 @@ func (a *Agent) Wrap(handler interface{}) interface{} {
 	return lambdahooks.Wrap(handler)
 }
 
-// AfterExecution captures the request as an audit event or a sample
-// Only API Gateway events are supported at this time
+// AfterExecution captures the request as an audit event or a sample.
+// Only API Gateway events are supported at this time.
 func (a *Agent) AfterExecution(
+	ctx context.Context,
+	payload []byte,
+	newPayload []byte,
+	response interface{},
+	errorValue interface{},
+) {
+	a.Collect(
+		ctx,
+		payload,
+		newPayload,
+		response,
+		errorValue,
+	)
+}
+
+// Collect captures the request as an audit event or a sample.
+// Only API Gateway events are supported at this time.
+func (a *Agent) Collect(
 	ctx context.Context,
 	payload []byte,
 	newPayload []byte,
