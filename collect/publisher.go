@@ -156,11 +156,6 @@ func WithBlockOnSend(block bool) PublisherOption {
 	}
 }
 
-// Responses returns the response channel to read responses from
-func (p *EventPublisher) Responses() <-chan Response {
-	return p.responses
-}
-
 // createMuster creates the muster client that coordinates the batch processing
 func (p *EventPublisher) createMuster() *muster.Client {
 	m := new(muster.Client)
@@ -231,4 +226,28 @@ func (p *EventPublisher) Publish(
 		Err: fmt.Errorf("Unable to build event"),
 	}
 	writeToChannel(p.responses, res, p.blockOnResponse)
+}
+
+// Responses returns the response channel to read responses from
+func (p *EventPublisher) Responses() <-chan Response {
+	return p.responses
+}
+
+// Flush sends anything pending in muster
+func (p *EventPublisher) Flush() error {
+	// There isn't a way to flush a muster.Client directly, so we have to stop
+	// the old one (which has a side-effect of flushing the data) and make a new
+	// one. We start the new one and swap it with the old one so that we minimize
+	// the time we hold the musterLock for.
+	m := p.muster
+	newMuster := p.createMuster()
+	err := newMuster.Start()
+	if err != nil {
+		return err
+	}
+
+	p.musterLock.Lock()
+	p.muster = newMuster
+	p.musterLock.Unlock()
+	return m.Stop()
 }

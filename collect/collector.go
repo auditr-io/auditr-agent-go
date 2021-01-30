@@ -109,3 +109,8 @@ func (c *Collector) Collect(
 func (c *Collector) Responses() <-chan Response {
 	return c.publisher.(*EventPublisher).Responses()
 }
+
+// Flush sends anything pending in queue
+func (c *Collector) Flush() error {
+	return c.publisher.(*EventPublisher).Flush()
+}

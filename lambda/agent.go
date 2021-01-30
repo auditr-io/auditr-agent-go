@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"sync"
 
 	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/lambdahooks-go"
@@ -13,6 +14,7 @@ import (
 // Agent is an auditr agent that collects and reports events
 type Agent struct {
 	collector *collect.Collector
+	hooksInit sync.Once
 }
 
 // NewAgent creates a new agent instance
@@ -31,17 +33,17 @@ func NewAgent(options ...collect.CollectorOption) (*Agent, error) {
 
 	a.collector = c
 
-	lambdahooks.Init(
-		lambdahooks.WithPostHooks(
-			a,
-		),
-	)
-
 	return a, nil
 }
 
 // Wrap wraps a handler with audit hooks
 func (a *Agent) Wrap(handler interface{}) interface{} {
+	a.hooksInit.Do(func() {
+		lambdahooks.Init(
+			lambdahooks.WithPostHooks(a),
+		)
+	})
+
 	return lambdahooks.Wrap(handler)
 }
 
@@ -101,4 +103,9 @@ func (a *Agent) Collect(
 		response,
 		errorValue,
 	)
+}
+
+// Flush sends anything pending in queue
+func (a *Agent) Flush() error {
+	return a.collector.Flush()
 }
