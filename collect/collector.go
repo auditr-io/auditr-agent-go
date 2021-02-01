@@ -93,8 +93,11 @@ func (c *Collector) Collect(
 
 	if route == nil {
 		log.Printf("route is nil when finding method %s path %s\n", httpMethod, path)
-		log.Printf("target %#v\n", c.router.target)
 		log.Printf("sampled %#v\n", c.router.sampled)
+		root, ok := c.router.sampled[httpMethod]
+		if ok {
+			log.Printf("sampled[GET] %#v\n", root)
+		}
 	}
 
 	if route != nil {
