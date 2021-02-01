@@ -78,12 +78,22 @@ func NewRouter(
 	sampledRoutes []config.Route,
 ) *Router {
 	r := &Router{
-		target:  make(map[string]*node),
-		sampled: make(map[string]*node),
+		target:    make(map[string]*node),
+		sampled:   make(map[string]*node),
+		maxParams: 5,
 	}
 
 	r.addRoutes(r.target, targetRoutes)
 	r.addRoutes(r.sampled, sampledRoutes)
+
+	// If no routes have been added, we need to still initialize
+	// the params pool with a sensible default
+	if r.paramsPool.New == nil && r.maxParams > 0 {
+		r.paramsPool.New = func() interface{} {
+			ps := make(Params, 0, r.maxParams)
+			return &ps
+		}
+	}
 
 	return r
 }
