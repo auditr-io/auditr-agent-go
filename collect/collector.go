@@ -91,6 +91,12 @@ func (c *Collector) Collect(
 		panic(err)
 	}
 
+	if route == nil {
+		log.Printf("route is nil when finding method %s path %s\n", httpMethod, path)
+		log.Printf("target %#v\n", c.router.target)
+		log.Printf("sampled %#v\n", c.router.sampled)
+	}
+
 	if route != nil {
 		log.Printf("route: %#v is already sampled", route)
 		return
