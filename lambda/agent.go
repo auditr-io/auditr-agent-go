@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/auditr-io/auditr-agent-go/collect"
@@ -94,10 +95,15 @@ func (a *Agent) Collect(
 		return
 	}
 
+	path := req.Path
+	if req.RequestContext.Stage != "" {
+		path = strings.TrimPrefix(path, "/"+req.RequestContext.Stage)
+	}
+
 	a.collector.Collect(
 		ctx,
 		req.HTTPMethod,
-		req.Path,
+		path,
 		req.Resource,
 		req,
 		response,
