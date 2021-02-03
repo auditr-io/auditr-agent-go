@@ -57,12 +57,15 @@ func (a *Agent) AfterExecution(
 	response interface{},
 	errorValue interface{},
 ) {
+	res, _ := json.Marshal(response)
+	errValue, _ := json.Marshal(errorValue)
+
 	a.Collect(
 		ctx,
 		payload,
 		newPayload,
-		response,
-		errorValue,
+		res,
+		errValue,
 	)
 }
 
@@ -70,26 +73,28 @@ func (a *Agent) AfterExecution(
 // Only API Gateway events are supported at this time.
 func (a *Agent) Collect(
 	ctx context.Context,
-	payload []byte,
-	newPayload []byte,
-	response interface{},
-	errorValue interface{},
+	payload json.RawMessage,
+	newPayload json.RawMessage,
+	response json.RawMessage,
+	errorValue json.RawMessage,
 ) {
-	if response == nil {
+	// TODO: support HTTP API and Websockets
+	if len(response) == 0 {
 		// API Gateway expects a non-nil response
 		return
 	}
 
-	// TODO: support HTTP API and Websockets
-	_, ok := response.(events.APIGatewayProxyResponse)
-	if !ok {
+	var res events.APIGatewayProxyResponse
+	err := json.Unmarshal(response, &res)
+	if err != nil {
+		// Non API Gateway response is not supported at this time
 		return
 	}
 
 	var req events.APIGatewayProxyRequest
 	// We only care about the original request, not the modified request.
 	// So, we use payload here.
-	err := json.Unmarshal(payload, &req)
+	err = json.Unmarshal(payload, &req)
 	if err != nil {
 		log.Printf("Error unmarshalling payload: %s", string(payload))
 		return

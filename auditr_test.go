@@ -42,6 +42,9 @@ func (m *mockTransport) successRoundTripResponse() (*http.Response, error) {
 func TestAudit(t *testing.T) {
 	id := "xyz"
 	req := events.APIGatewayProxyRequest{
+		HTTPMethod:     http.MethodPut,
+		Resource:       "/events/{id}",
+		Path:           fmt.Sprintf("/events/%s", id),
 		PathParameters: map[string]string{"id": id},
 	}
 
