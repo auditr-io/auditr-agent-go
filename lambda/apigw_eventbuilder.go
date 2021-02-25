@@ -6,7 +6,7 @@ import (
 
 	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/auditr-agent-go/config"
-	"github.com/aws/aws-lambda-go/events"
+	"github.com/auditr-io/auditr-agent-go/lambda/events"
 	"github.com/segmentio/ksuid"
 )
 

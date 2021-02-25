@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/auditr-io/auditr-agent-go/collect"
+	"github.com/auditr-io/auditr-agent-go/lambda/events"
 	"github.com/auditr-io/lambdahooks-go"
-	"github.com/aws/aws-lambda-go/events"
 )
 
 // Agent is an auditr agent that collects and reports events

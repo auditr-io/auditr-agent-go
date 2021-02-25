@@ -202,8 +202,10 @@ func (p *EventPublisher) Publish(
 	response interface{},
 	errorValue interface{},
 ) {
+	var event *Event
+	var err error
 	for _, b := range p.eventBuilders {
-		event, err := b.Build(
+		event, err = b.Build(
 			routeType,
 			route,
 			request,
@@ -223,7 +225,7 @@ func (p *EventPublisher) Publish(
 	}
 
 	res := Response{
-		Err: fmt.Errorf("Unable to build event"),
+		Err: fmt.Errorf("Unable to build event: %s", err),
 	}
 	writeToChannel(p.responses, res, p.blockOnResponse)
 }

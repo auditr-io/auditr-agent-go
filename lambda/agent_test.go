@@ -13,8 +13,8 @@ import (
 
 	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/auditr-agent-go/config"
+	"github.com/auditr-io/auditr-agent-go/lambda/events"
 	"github.com/auditr-io/auditr-agent-go/test"
-	"github.com/aws/aws-lambda-go/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

@@ -12,11 +12,14 @@ import (
 	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/auditr-io/auditr-agent-go/lambda"
-	"github.com/aws/aws-lambda-go/events"
-	awslambda "github.com/aws/aws-lambda-go/lambda"
+	"github.com/auditr-io/auditr-agent-go/lambda/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+type Handler interface {
+	Invoke(ctx context.Context, payload []byte) ([]byte, error)
+}
 
 // mockTransport is a mock Transport client
 type mockTransport struct {
@@ -124,7 +127,7 @@ func TestAudit(t *testing.T) {
 	agentInstance, _ = lambda.NewAgent(
 		collect.WithHTTPClient(mockClient),
 	)
-	wrappedHandler := Audit(handler).(awslambda.Handler)
+	wrappedHandler := Audit(handler).(Handler)
 	reqBytes, _ := json.Marshal(req)
 	resBytes, _ := wrappedHandler.Invoke(context.Background(), reqBytes)
 
