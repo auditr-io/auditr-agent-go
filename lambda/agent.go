@@ -96,7 +96,7 @@ func (a *Agent) Collect(
 	// So, we use payload here.
 	err = json.Unmarshal(payload, &req)
 	if err != nil {
-		log.Printf("Error unmarshalling payload: %s", string(payload))
+		log.Printf("Error unmarshalling payload: %s\n%v", string(payload), err)
 		return
 	}
 
