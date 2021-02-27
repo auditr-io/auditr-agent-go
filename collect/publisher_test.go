@@ -121,7 +121,6 @@ func TestPublish_PublishesEvent(t *testing.T) {
 
 	eventResponse := func() (int, []byte) {
 		statusCode := 200
-		// eventJSON, _ := json.Marshal(event)
 
 		return statusCode, []byte(`[
 			{

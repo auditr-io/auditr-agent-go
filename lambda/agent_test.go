@@ -100,7 +100,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 		Path:           fmt.Sprintf(`/events/%s`, id),
 		PathParameters: map[string]string{"id": id},
 	}
-	payload, err := json.Marshal(req)
+	payload, err := req.MarshalJSON()
 	assert.NoError(t, err)
 
 	body := fmt.Sprintf(`{"id": %s}`, id)
@@ -143,7 +143,6 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 
 	eventResponse := func() (int, []byte) {
 		statusCode := 200
-		// eventJSON, _ := json.Marshal(event)
 
 		return statusCode, []byte(`[
 			{
@@ -225,7 +224,7 @@ func TestAfterExecution_SkipsSampledAPIGatewayEvent(t *testing.T) {
 		Resource:   "/events",
 		Path:       "/events",
 	}
-	payload, err := json.Marshal(req)
+	payload, err := req.MarshalJSON()
 	assert.NoError(t, err)
 
 	body := fmt.Sprintf(`{"id": %s}`, id)
@@ -313,7 +312,7 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 		Resource:   "/events/{id}",
 		Path:       fmt.Sprintf("/events/%s", id),
 	}
-	payload, err := json.Marshal(req)
+	payload, err := req.MarshalJSON()
 	assert.NoError(t, err)
 
 	body := fmt.Sprintf(`{"id": %s}`, id)
@@ -359,7 +358,6 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 
 	eventResponse := func() (int, []byte) {
 		statusCode := 200
-		// eventJSON, _ := json.Marshal(event)
 
 		return statusCode, []byte(`[
 			{
@@ -441,7 +439,7 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 		Resource:   "/events/{id}",
 		Path:       fmt.Sprintf("/events/%s", id),
 	}
-	payload, err := json.Marshal(req)
+	payload, err := req.MarshalJSON()
 	assert.NoError(t, err)
 
 	body := fmt.Sprintf(`{"id": %s}`, id)
@@ -487,7 +485,6 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 
 	eventResponse := func() (int, []byte) {
 		statusCode := 200
-		// eventJSON, _ := json.Marshal(event)
 
 		return statusCode, []byte(`[
 			{
