@@ -121,7 +121,6 @@ func TestPublish_PublishesEvent(t *testing.T) {
 
 	eventResponse := func() (int, []byte) {
 		statusCode := 200
-		// eventJSON, _ := json.Marshal(event)
 
 		return statusCode, []byte(`[
 			{
@@ -143,8 +142,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var eventBatch []*Event
-				err = json.Unmarshal(reqBody, &eventBatch)
+				var eventBatch EventList
+				err = eventBatch.UnmarshalJSON(reqBody)
 				assert.NoError(t, err)
 				event := eventBatch[0]
 				assert.True(t, strings.HasPrefix(event.ID, "evt_"))
@@ -345,8 +344,8 @@ func TestFlush_PublishesEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var eventBatch []*Event
-				err = json.Unmarshal(reqBody, &eventBatch)
+				var eventBatch EventList
+				err = eventBatch.UnmarshalJSON(reqBody)
 				assert.NoError(t, err)
 				event := eventBatch[0]
 				assert.True(t, strings.HasPrefix(event.ID, "evt_"))
