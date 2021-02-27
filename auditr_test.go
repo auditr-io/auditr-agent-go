@@ -128,11 +128,11 @@ func TestAudit(t *testing.T) {
 		collect.WithHTTPClient(mockClient),
 	)
 	wrappedHandler := Audit(handler).(Handler)
-	reqBytes, _ := req.MarshalJSON()
+	reqBytes, _ := json.Marshal(req)
 	resBytes, _ := wrappedHandler.Invoke(context.Background(), reqBytes)
 
 	var actual events.APIGatewayProxyResponse
-	err := actual.UnmarshalJSON(resBytes)
+	err := json.Unmarshal(resBytes, &actual)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, actual)
 }

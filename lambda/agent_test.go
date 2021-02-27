@@ -100,7 +100,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 		Path:           fmt.Sprintf(`/events/%s`, id),
 		PathParameters: map[string]string{"id": id},
 	}
-	payload, err := req.MarshalJSON()
+	payload, err := json.Marshal(req)
 	assert.NoError(t, err)
 
 	body := fmt.Sprintf(`{"id": %s}`, id)
@@ -143,6 +143,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 
 	eventResponse := func() (int, []byte) {
 		statusCode := 200
+		// eventJSON, _ := json.Marshal(event)
 
 		return statusCode, []byte(`[
 			{
@@ -165,8 +166,8 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var eventBatch collect.EventList
-				err = eventBatch.UnmarshalJSON(reqBody)
+				var eventBatch []*collect.Event
+				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
 				event := eventBatch[0]
 				assert.Equal(t, collect.RouteTypeSampled, event.RouteType)
@@ -224,7 +225,7 @@ func TestAfterExecution_SkipsSampledAPIGatewayEvent(t *testing.T) {
 		Resource:   "/events",
 		Path:       "/events",
 	}
-	payload, err := req.MarshalJSON()
+	payload, err := json.Marshal(req)
 	assert.NoError(t, err)
 
 	body := fmt.Sprintf(`{"id": %s}`, id)
@@ -312,7 +313,7 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 		Resource:   "/events/{id}",
 		Path:       fmt.Sprintf("/events/%s", id),
 	}
-	payload, err := req.MarshalJSON()
+	payload, err := json.Marshal(req)
 	assert.NoError(t, err)
 
 	body := fmt.Sprintf(`{"id": %s}`, id)
@@ -358,6 +359,7 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 
 	eventResponse := func() (int, []byte) {
 		statusCode := 200
+		// eventJSON, _ := json.Marshal(event)
 
 		return statusCode, []byte(`[
 			{
@@ -379,8 +381,8 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var eventBatch collect.EventList
-				err = eventBatch.UnmarshalJSON(reqBody)
+				var eventBatch []*collect.Event
+				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
 				event := eventBatch[0]
 				assert.Equal(t, collect.RouteTypeTarget, event.RouteType)
@@ -439,7 +441,7 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 		Resource:   "/events/{id}",
 		Path:       fmt.Sprintf("/events/%s", id),
 	}
-	payload, err := req.MarshalJSON()
+	payload, err := json.Marshal(req)
 	assert.NoError(t, err)
 
 	body := fmt.Sprintf(`{"id": %s}`, id)
@@ -485,6 +487,7 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 
 	eventResponse := func() (int, []byte) {
 		statusCode := 200
+		// eventJSON, _ := json.Marshal(event)
 
 		return statusCode, []byte(`[
 			{
@@ -506,8 +509,8 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
-				var eventBatch collect.EventList
-				err = eventBatch.UnmarshalJSON(reqBody)
+				var eventBatch []*collect.Event
+				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
 				event := eventBatch[0]
 				assert.Equal(t, collect.RouteTypeTarget, event.RouteType)

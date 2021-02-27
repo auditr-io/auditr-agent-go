@@ -266,7 +266,7 @@ func (b *batchList) encodeJSON(events []*Event) ([]byte, int) {
 			buf.WriteByte(',')
 		}
 
-		payload, err := e.MarshalJSON()
+		payload, err := json.Marshal(e)
 		if err != nil {
 			b.enqueueResponse(Response{
 				Err: err,

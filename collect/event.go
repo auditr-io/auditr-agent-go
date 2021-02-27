@@ -3,7 +3,6 @@ package collect
 import "github.com/auditr-io/auditr-agent-go/config"
 
 // Event is an audit event
-// easyjson:json
 type Event struct {
 	ID          string        `json:"id"`
 	Action      string        `json:"action"`
@@ -20,14 +19,9 @@ type Event struct {
 }
 
 // Actor is the user originating the action
-// easyjson:json
 type Actor struct {
 	ID       string `json:"actor_id"`
 	Name     string `json:"name"`
 	Username string `json:"username,omitempty"`
 	Email    string `json:"email,omitempty"`
 }
-
-// EventList is a list of events
-//easyjson:json
-type EventList []*Event
