@@ -12,6 +12,7 @@ require (
 	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/google/go-cmp v0.5.4 // indirect
 	github.com/hashicorp/terraform v0.14.5
+	github.com/mailru/easyjson v0.0.0-20160728113105-d5b7844b561a
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/segmentio/ksuid v1.0.3
 	github.com/spf13/viper v1.7.1
