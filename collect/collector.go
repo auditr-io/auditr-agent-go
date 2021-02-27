@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"sync"
 
 	"github.com/auditr-io/auditr-agent-go/config"
 )
@@ -15,8 +14,7 @@ type Collector struct {
 	router        *Router
 	publisher     Publisher
 
-	setupc     chan struct{}
-	setupCheck sync.Once
+	setupReadyc chan struct{}
 }
 
 // CollectorOption is an option to override defaults
@@ -32,7 +30,7 @@ func NewCollector(
 ) (*Collector, error) {
 	c := &Collector{
 		configOptions: []config.ConfigOption{},
-		setupc:        make(chan struct{}, 1),
+		setupReadyc:   make(chan struct{}, 1),
 	}
 
 	for _, opt := range options {
@@ -49,7 +47,7 @@ func NewCollector(
 			config.SampledRoutes,
 		)
 
-		close(c.setupc)
+		close(c.setupReadyc)
 	}()
 
 	p, err := NewEventPublisher(builders)
@@ -83,10 +81,7 @@ func (c *Collector) Collect(
 	response interface{},
 	errorValue interface{},
 ) {
-	c.setupCheck.Do(func() {
-		log.Println("waiting for setupc")
-		<-c.setupc
-	})
+	<-c.setupReadyc
 
 	route, err := c.router.FindRoute(RouteTypeTarget, httpMethod, path)
 	if err != nil {
