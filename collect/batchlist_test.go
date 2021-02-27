@@ -596,7 +596,7 @@ func TestEncodeJSON_FailsOnInvalidEvent(t *testing.T) {
 			},
 		},
 	}
-	_, expectedErr := json.Marshal(events[0])
+	_, expectedErr := events[0].MarshalJSON()
 
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	var wg sync.WaitGroup
