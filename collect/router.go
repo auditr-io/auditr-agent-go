@@ -70,6 +70,7 @@ type Router struct {
 	maxParams  uint16
 	target     map[string]*node
 	sampled    map[string]*node
+	sampleLock sync.Mutex
 }
 
 // NewRouter creates a new router
@@ -194,6 +195,9 @@ func (r *Router) SampleRoute(
 ) *config.Route {
 	method = strings.ToUpper(method)
 
+	r.sampleLock.Lock()
+	defer r.sampleLock.Unlock()
+
 	root, ok := r.sampled[method]
 	if !ok {
 		root = new(node)
@@ -207,6 +211,14 @@ func (r *Router) SampleRoute(
 			HTTPMethod: method,
 			Path:       r.Replace(resource),
 		}
+	} else {
+		// todo: handle {proxy+}
+		return nil
+	}
+
+	handler, _, _ := root.getValue(path, r.getParams)
+	if handler != nil {
+		return nil
 	}
 
 	root.addRoute(route.Path, newHandler(route.Path))
