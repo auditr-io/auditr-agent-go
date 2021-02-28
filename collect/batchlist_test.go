@@ -236,7 +236,7 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 		ID:      eventID,
 		Request: "",
 	}
-	payloadExclReqContent, _ := event.MarshalJSON()
+	payloadExclReqContent, _ := json.Marshal(event)
 	// This will cause the batch to overflow
 	event.Request = randomString(maxEventBytes - len(payloadExclReqContent))
 
@@ -567,7 +567,7 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 }
 
 func TestEncodeJSON(t *testing.T) {
-	events := make(EventList, 3)
+	events := make([]*Event, 3)
 	for i := 0; i < len(events); i++ {
 		events[i] = &Event{
 			ID: ksuid.New().String(),
@@ -579,7 +579,7 @@ func TestEncodeJSON(t *testing.T) {
 	eventsJSON, numEncoded := b.encodeJSON(events)
 	assert.Equal(t, len(events), numEncoded)
 
-	expectedJSON, _ := events.MarshalJSON()
+	expectedJSON, _ := json.Marshal(events)
 	assert.Equal(t, expectedJSON, eventsJSON)
 }
 
@@ -596,7 +596,7 @@ func TestEncodeJSON_FailsOnInvalidEvent(t *testing.T) {
 			},
 		},
 	}
-	_, expectedErr := events[0].MarshalJSON()
+	_, expectedErr := json.Marshal(events[0])
 
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	var wg sync.WaitGroup
@@ -619,7 +619,7 @@ func TestEncodeJSON_FailsOnOversizedEvent(t *testing.T) {
 		ID:      eventID,
 		Request: "",
 	}
-	payloadExclReqContent, _ := event.MarshalJSON()
+	payloadExclReqContent, _ := json.Marshal(event)
 	event.Request = randomString(maxEventBytes - len(payloadExclReqContent) + 1)
 
 	events := []*Event{
@@ -648,7 +648,7 @@ func TestEncodeJSON_ReenqueuesOnOversizedBatch(t *testing.T) {
 		ID:      eventID,
 		Request: "",
 	}
-	payloadExclReqContent, _ := event.MarshalJSON()
+	payloadExclReqContent, _ := json.Marshal(event)
 	event.Request = randomString(maxEventBytes - len(payloadExclReqContent))
 
 	events := make([]*Event, DefaultMaxEventsPerBatch)
