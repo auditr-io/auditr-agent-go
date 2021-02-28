@@ -84,17 +84,17 @@ func (a *Agent) Collect(
 		return
 	}
 
-	var res events.APIGatewayProxyResponse
-	err := json.Unmarshal(response, &res)
-	if err != nil {
-		// Non API Gateway response is not supported at this time
-		return
-	}
+	// var res events.APIGatewayProxyResponse
+	// err := json.Unmarshal(response, &res)
+	// if err != nil {
+	// 	// Non API Gateway response is not supported at this time
+	// 	return
+	// }
 
 	var req events.APIGatewayProxyRequest
 	// We only care about the original request, not the modified request.
 	// So, we use payload here.
-	err = json.Unmarshal(payload, &req)
+	err := json.Unmarshal(payload, &req)
 	if err != nil {
 		log.Printf("Error unmarshalling payload: %s\n%v", string(payload), err)
 		return
