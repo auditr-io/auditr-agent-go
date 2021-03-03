@@ -559,5 +559,5 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 
 	wg.Wait()
 
-	assert.GreaterOrEqual(t, 2, len(m.Calls))
+	assert.GreaterOrEqual(t, len(m.Calls), 2)
 }
