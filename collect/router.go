@@ -8,15 +8,15 @@ import (
 	"github.com/auditr-io/auditr-agent-go/config"
 )
 
-// RouteType describes the type of route; either target or sampled
+// RouteType describes the type of route; either target or sample
 type RouteType string
 
 const (
 	// RouteTypeTarget is a route that is targeted
 	RouteTypeTarget RouteType = "target"
 
-	// RouteTypeSampled is a route that is sampled
-	RouteTypeSampled RouteType = "sampled"
+	// RouteTypeSample is a route that is sample
+	RouteTypeSample RouteType = "sample"
 )
 
 // Param is a single URL parameter, consisting of a key and a value.
@@ -64,28 +64,28 @@ func newHandler(path string) Handle {
 	}
 }
 
-// Router matches the incoming request to a route that is targeted or sampled
+// Router matches the incoming request to a route that is targeted or sample
 type Router struct {
 	paramsPool sync.Pool
 	maxParams  uint16
 	target     map[string]*node
-	sampled    map[string]*node
+	sample     map[string]*node
 	sampleLock sync.Mutex
 }
 
 // NewRouter creates a new router
 func NewRouter(
 	targetRoutes []config.Route,
-	sampledRoutes []config.Route,
+	sampleRoutes []config.Route,
 ) *Router {
 	r := &Router{
 		target:    make(map[string]*node),
-		sampled:   make(map[string]*node),
+		sample:    make(map[string]*node),
 		maxParams: 5,
 	}
 
 	r.addRoutes(r.target, targetRoutes)
-	r.addRoutes(r.sampled, sampledRoutes)
+	r.addRoutes(r.sample, sampleRoutes)
 
 	// If no routes have been added, we need to still initialize
 	// the params pool with a sensible default
@@ -155,10 +155,10 @@ func (r *Router) FindRoute(
 	switch routeType {
 	case RouteTypeTarget:
 		tree = r.target
-	case RouteTypeSampled:
-		tree = r.sampled
+	case RouteTypeSample:
+		tree = r.sample
 	default:
-		return nil, fmt.Errorf("routeType must be RouteTypeTarget or RouteTypeSampled")
+		return nil, fmt.Errorf("routeType must be RouteTypeTarget or RouteTypeSample")
 	}
 
 	if method == "" {
@@ -187,7 +187,7 @@ func (r *Router) FindRoute(
 	return nil, nil
 }
 
-// SampleRoute adds a new route to sampled routes
+// SampleRoute adds a new route to sample routes
 func (r *Router) SampleRoute(
 	method string,
 	path string,
@@ -198,10 +198,10 @@ func (r *Router) SampleRoute(
 	r.sampleLock.Lock()
 	defer r.sampleLock.Unlock()
 
-	root, ok := r.sampled[method]
+	root, ok := r.sample[method]
 	if !ok {
 		root = new(node)
-		r.sampled[method] = root
+		r.sample[method] = root
 	}
 
 	var route *config.Route

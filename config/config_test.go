@@ -112,10 +112,10 @@ func TestSeedConfig(t *testing.T) {
 
 func TestAcquiredConfig(t *testing.T) {
 	expected := struct {
-		BaseURL       string  `json:"base_url"`
-		EventsPath    string  `json:"events_path"`
-		TargetRoutes  []Route `json:"target"`
-		SampledRoutes []Route `json:"sampled"`
+		BaseURL      string  `json:"base_url"`
+		EventsPath   string  `json:"events_path"`
+		TargetRoutes []Route `json:"target"`
+		SampleRoutes []Route `json:"sample"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -128,7 +128,7 @@ func TestAcquiredConfig(t *testing.T) {
 				Path:       "/events/:id",
 			},
 		},
-		SampledRoutes: []Route{
+		SampleRoutes: []Route{
 			{
 				HTTPMethod: http.MethodGet,
 				Path:       "/events",
@@ -190,5 +190,5 @@ func TestAcquiredConfig(t *testing.T) {
 	expectedEventsURL.Path = path.Join(expectedEventsURL.Path, expected.EventsPath)
 	assert.Equal(t, expectedEventsURL.String(), EventsURL)
 	assert.Equal(t, expected.TargetRoutes, TargetRoutes)
-	assert.Equal(t, expected.SampledRoutes, SampledRoutes)
+	assert.Equal(t, expected.SampleRoutes, SampleRoutes)
 }

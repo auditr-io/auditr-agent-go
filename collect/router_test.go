@@ -14,8 +14,8 @@ func TestSampleRoute_RouteFoundAfterSampling(t *testing.T) {
 		[]config.Route{},
 	)
 
-	sampledRoute := r.SampleRoute(http.MethodGet, "/person/xyz", "/person/{id}")
-	foundRoute, err := r.FindRoute(RouteTypeSampled, http.MethodGet, "/person/xyz")
+	sampleRoute := r.SampleRoute(http.MethodGet, "/person/xyz", "/person/{id}")
+	foundRoute, err := r.FindRoute(RouteTypeSample, http.MethodGet, "/person/xyz")
 	assert.NoError(t, err)
-	assert.Equal(t, sampledRoute, foundRoute)
+	assert.Equal(t, sampleRoute, foundRoute)
 }

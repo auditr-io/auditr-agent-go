@@ -60,10 +60,10 @@ func (n *notifier) Done() {
 
 func TestBatchListFire(t *testing.T) {
 	cfg := struct {
-		BaseURL       string         `json:"base_url"`
-		EventsPath    string         `json:"events_path"`
-		TargetRoutes  []config.Route `json:"target"`
-		SampledRoutes []config.Route `json:"sampled"`
+		BaseURL      string         `json:"base_url"`
+		EventsPath   string         `json:"events_path"`
+		TargetRoutes []config.Route `json:"target"`
+		SampleRoutes []config.Route `json:"sample"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -76,7 +76,7 @@ func TestBatchListFire(t *testing.T) {
 				Path:       "/events/:id",
 			},
 		},
-		SampledRoutes: []config.Route{
+		SampleRoutes: []config.Route{
 			{
 				HTTPMethod: http.MethodGet,
 				Path:       "/events",
@@ -153,10 +153,10 @@ func TestBatchListFire(t *testing.T) {
 
 func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 	cfg := struct {
-		BaseURL       string         `json:"base_url"`
-		EventsPath    string         `json:"events_path"`
-		TargetRoutes  []config.Route `json:"target"`
-		SampledRoutes []config.Route `json:"sampled"`
+		BaseURL      string         `json:"base_url"`
+		EventsPath   string         `json:"events_path"`
+		TargetRoutes []config.Route `json:"target"`
+		SampleRoutes []config.Route `json:"sample"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -169,7 +169,7 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 				Path:       "/events/:id",
 			},
 		},
-		SampledRoutes: []config.Route{
+		SampleRoutes: []config.Route{
 			{
 				HTTPMethod: http.MethodGet,
 				Path:       "/events",
@@ -254,10 +254,10 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 
 func TestSend(t *testing.T) {
 	cfg := struct {
-		BaseURL       string         `json:"base_url"`
-		EventsPath    string         `json:"events_path"`
-		TargetRoutes  []config.Route `json:"target"`
-		SampledRoutes []config.Route `json:"sampled"`
+		BaseURL      string         `json:"base_url"`
+		EventsPath   string         `json:"events_path"`
+		TargetRoutes []config.Route `json:"target"`
+		SampleRoutes []config.Route `json:"sample"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -270,7 +270,7 @@ func TestSend(t *testing.T) {
 				Path:       "/events/:id",
 			},
 		},
-		SampledRoutes: []config.Route{
+		SampleRoutes: []config.Route{
 			{
 				HTTPMethod: http.MethodGet,
 				Path:       "/events",
@@ -347,10 +347,10 @@ func TestSend_GetResponseOnError(t *testing.T) {
 	expectedErr := fmt.Errorf("random error")
 
 	cfg := struct {
-		BaseURL       string         `json:"base_url"`
-		EventsPath    string         `json:"events_path"`
-		TargetRoutes  []config.Route `json:"target"`
-		SampledRoutes []config.Route `json:"sampled"`
+		BaseURL      string         `json:"base_url"`
+		EventsPath   string         `json:"events_path"`
+		TargetRoutes []config.Route `json:"target"`
+		SampleRoutes []config.Route `json:"sample"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -363,7 +363,7 @@ func TestSend_GetResponseOnError(t *testing.T) {
 				Path:       "/events/:id",
 			},
 		},
-		SampledRoutes: []config.Route{
+		SampleRoutes: []config.Route{
 			{
 				HTTPMethod: http.MethodGet,
 				Path:       "/events",
@@ -458,10 +458,10 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 	]`)
 
 	cfg := struct {
-		BaseURL       string         `json:"base_url"`
-		EventsPath    string         `json:"events_path"`
-		TargetRoutes  []config.Route `json:"target"`
-		SampledRoutes []config.Route `json:"sampled"`
+		BaseURL      string         `json:"base_url"`
+		EventsPath   string         `json:"events_path"`
+		TargetRoutes []config.Route `json:"target"`
+		SampleRoutes []config.Route `json:"sample"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -474,7 +474,7 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 				Path:       "/events/:id",
 			},
 		},
-		SampledRoutes: []config.Route{
+		SampleRoutes: []config.Route{
 			{
 				HTTPMethod: http.MethodGet,
 				Path:       "/events",

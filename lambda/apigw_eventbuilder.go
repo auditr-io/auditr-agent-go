@@ -1,6 +1,7 @@
 package lambda
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -18,8 +19,8 @@ func (b *APIGatewayEventBuilder) Build(
 	routeType collect.RouteType,
 	route *config.Route,
 	request interface{},
-	response interface{},
-	errorValue interface{},
+	response json.RawMessage,
+	errorValue json.RawMessage,
 ) (*collect.Event, error) {
 	req, ok := request.(events.APIGatewayProxyRequest)
 	if !ok {

@@ -65,10 +65,10 @@ func TestAudit(t *testing.T) {
 
 	configResponse := func() (int, []byte) {
 		cfg := struct {
-			BaseURL       string         `json:"base_url"`
-			EventsPath    string         `json:"events_path"`
-			TargetRoutes  []config.Route `json:"target"`
-			SampledRoutes []config.Route `json:"sampled"`
+			BaseURL      string         `json:"base_url"`
+			EventsPath   string         `json:"events_path"`
+			TargetRoutes []config.Route `json:"target"`
+			SampleRoutes []config.Route `json:"sample"`
 		}{
 			BaseURL:    "https://dev-api.auditr.io/v1",
 			EventsPath: "/events",
@@ -81,7 +81,7 @@ func TestAudit(t *testing.T) {
 					Path:       "/events/:id",
 				},
 			},
-			SampledRoutes: []config.Route{
+			SampleRoutes: []config.Route{
 				{
 					HTTPMethod: http.MethodGet,
 					Path:       "/events",

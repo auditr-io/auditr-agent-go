@@ -2,6 +2,7 @@ package collect
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -44,7 +45,7 @@ func NewCollector(
 
 		c.router = NewRouter(
 			config.TargetRoutes,
-			config.SampledRoutes,
+			config.SampleRoutes,
 		)
 
 		close(c.setupReadyc)
@@ -78,8 +79,8 @@ func (c *Collector) Collect(
 	path string,
 	resource string,
 	request interface{},
-	response interface{},
-	errorValue interface{},
+	response json.RawMessage,
+	errorValue json.RawMessage,
 ) {
 	<-c.setupReadyc
 
@@ -94,15 +95,15 @@ func (c *Collector) Collect(
 		return
 	}
 
-	route, err = c.router.FindRoute(RouteTypeSampled, httpMethod, path)
+	route, err = c.router.FindRoute(RouteTypeSample, httpMethod, path)
 	if err != nil {
 		panic(err)
 	}
 
 	if route == nil {
 		log.Printf("route is nil when finding method %s path %s\n", httpMethod, path)
-		log.Printf("sampled %#v\n", c.router.sampled)
-		root, ok := c.router.sampled[httpMethod]
+		log.Printf("sampled %#v\n", c.router.sample)
+		root, ok := c.router.sample[httpMethod]
 		if ok {
 			log.Printf("sampled[GET] %#v\n", root)
 		}
@@ -117,7 +118,7 @@ func (c *Collector) Collect(
 	route = c.router.SampleRoute(httpMethod, path, resource)
 	if route != nil {
 		log.Printf("route: %#v is sampled", route)
-		c.publisher.Publish(RouteTypeSampled, route, request, response, errorValue)
+		c.publisher.Publish(RouteTypeSample, route, request, response, errorValue)
 		return
 	}
 }

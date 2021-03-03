@@ -22,10 +22,10 @@ import (
 func TestNewAgent_ReturnsAgent(t *testing.T) {
 	configResponse := func() (int, []byte) {
 		cfg := struct {
-			BaseURL       string         `json:"base_url"`
-			EventsPath    string         `json:"events_path"`
-			TargetRoutes  []config.Route `json:"target"`
-			SampledRoutes []config.Route `json:"sampled"`
+			BaseURL      string         `json:"base_url"`
+			EventsPath   string         `json:"events_path"`
+			TargetRoutes []config.Route `json:"target"`
+			SampleRoutes []config.Route `json:"sample"`
 		}{
 			BaseURL:    "https://dev-api.auditr.io/v1",
 			EventsPath: "/events",
@@ -38,7 +38,7 @@ func TestNewAgent_ReturnsAgent(t *testing.T) {
 					Path:       "/events/:id",
 				},
 			},
-			SampledRoutes: []config.Route{
+			SampleRoutes: []config.Route{
 				{
 					HTTPMethod: http.MethodGet,
 					Path:       "/events",
@@ -111,10 +111,10 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 
 	configResponse := func() (int, []byte) {
 		cfg := struct {
-			BaseURL       string         `json:"base_url"`
-			EventsPath    string         `json:"events_path"`
-			TargetRoutes  []config.Route `json:"target"`
-			SampledRoutes []config.Route `json:"sampled"`
+			BaseURL      string         `json:"base_url"`
+			EventsPath   string         `json:"events_path"`
+			TargetRoutes []config.Route `json:"target"`
+			SampleRoutes []config.Route `json:"sample"`
 		}{
 			BaseURL:    "https://dev-api.auditr.io/v1",
 			EventsPath: "/events",
@@ -127,7 +127,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 					Path:       "/events/:id",
 				},
 			},
-			SampledRoutes: []config.Route{
+			SampleRoutes: []config.Route{
 				{
 					HTTPMethod: http.MethodGet,
 					Path:       "/events",
@@ -170,7 +170,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 				err = json.Unmarshal(reqBody, &eventBatch)
 				assert.NoError(t, err)
 				event := eventBatch[0]
-				assert.Equal(t, collect.RouteTypeSampled, event.RouteType)
+				assert.Equal(t, collect.RouteTypeSample, event.RouteType)
 
 				statusCode, responseBody = eventResponse()
 			}
@@ -218,7 +218,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 	assert.True(t, m.AssertExpectations(t))
 }
 
-func TestAfterExecution_SkipsSampledAPIGatewayEvent(t *testing.T) {
+func TestAfterExecution_SkipsSampleAPIGatewayEvent(t *testing.T) {
 	id := "xyz"
 	req := events.APIGatewayProxyRequest{
 		HTTPMethod: http.MethodGet,
@@ -236,10 +236,10 @@ func TestAfterExecution_SkipsSampledAPIGatewayEvent(t *testing.T) {
 
 	configResponse := func() (int, []byte) {
 		cfg := struct {
-			BaseURL       string         `json:"base_url"`
-			EventsPath    string         `json:"events_path"`
-			TargetRoutes  []config.Route `json:"target"`
-			SampledRoutes []config.Route `json:"sampled"`
+			BaseURL      string         `json:"base_url"`
+			EventsPath   string         `json:"events_path"`
+			TargetRoutes []config.Route `json:"target"`
+			SampleRoutes []config.Route `json:"sample"`
 		}{
 			BaseURL:    "https://dev-api.auditr.io/v1",
 			EventsPath: "/events",
@@ -252,7 +252,7 @@ func TestAfterExecution_SkipsSampledAPIGatewayEvent(t *testing.T) {
 					Path:       "/events/:id",
 				},
 			},
-			SampledRoutes: []config.Route{
+			SampleRoutes: []config.Route{
 				{
 					HTTPMethod: http.MethodGet,
 					Path:       "/events",
@@ -324,10 +324,10 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 
 	configResponse := func() (int, []byte) {
 		cfg := struct {
-			BaseURL       string         `json:"base_url"`
-			EventsPath    string         `json:"events_path"`
-			TargetRoutes  []config.Route `json:"target"`
-			SampledRoutes []config.Route `json:"sampled"`
+			BaseURL      string         `json:"base_url"`
+			EventsPath   string         `json:"events_path"`
+			TargetRoutes []config.Route `json:"target"`
+			SampleRoutes []config.Route `json:"sample"`
 		}{
 			BaseURL:    "https://dev-api.auditr.io/v1",
 			EventsPath: "/events",
@@ -340,7 +340,7 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 					Path:       "/events/:id",
 				},
 			},
-			SampledRoutes: []config.Route{
+			SampleRoutes: []config.Route{
 				{
 					HTTPMethod: http.MethodGet,
 					Path:       "/events",
@@ -452,10 +452,10 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 
 	configResponse := func() (int, []byte) {
 		cfg := struct {
-			BaseURL       string         `json:"base_url"`
-			EventsPath    string         `json:"events_path"`
-			TargetRoutes  []config.Route `json:"target"`
-			SampledRoutes []config.Route `json:"sampled"`
+			BaseURL      string         `json:"base_url"`
+			EventsPath   string         `json:"events_path"`
+			TargetRoutes []config.Route `json:"target"`
+			SampleRoutes []config.Route `json:"sample"`
 		}{
 			BaseURL:    "https://dev-api.auditr.io/v1",
 			EventsPath: "/events",
@@ -468,7 +468,7 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 					Path:       "/events/:id",
 				},
 			},
-			SampledRoutes: []config.Route{
+			SampleRoutes: []config.Route{
 				{
 					HTTPMethod: http.MethodGet,
 					Path:       "/events",

@@ -26,10 +26,10 @@ type Route struct {
 
 // config is used to unmarshal acquired configuration
 type config struct {
-	BaseURL       string  `json:"base_url"`
-	EventsPath    string  `json:"events_path"`
-	TargetRoutes  []Route `json:"target"`
-	SampledRoutes []Route `json:"sampled"`
+	BaseURL      string  `json:"base_url"`
+	EventsPath   string  `json:"events_path"`
+	TargetRoutes []Route `json:"target"`
+	SampleRoutes []Route `json:"sample"`
 }
 
 // ConfigOption is an option to override defaults
@@ -54,10 +54,10 @@ var (
 
 // Acquired configuration
 var (
-	BaseURL       string
-	EventsURL     string
-	TargetRoutes  []Route
-	SampledRoutes []Route
+	BaseURL      string
+	EventsURL    string
+	TargetRoutes []Route
+	SampleRoutes []Route
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -200,7 +200,7 @@ func getConfig(ctx context.Context) error {
 	EventsURL = url.String()
 
 	TargetRoutes = c.TargetRoutes
-	SampledRoutes = c.SampledRoutes
+	SampleRoutes = c.SampleRoutes
 
 	return nil
 }

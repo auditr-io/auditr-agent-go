@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -28,8 +27,8 @@ type mockBuilder struct {
 		routeType RouteType,
 		route *config.Route,
 		request interface{},
-		response interface{},
-		errorValue interface{},
+		response json.RawMessage,
+		errorValue json.RawMessage,
 	) (*Event, error)
 }
 
@@ -37,8 +36,8 @@ func (m *mockBuilder) Build(
 	routeType RouteType,
 	route *config.Route,
 	request interface{},
-	response interface{},
-	errorValue interface{},
+	response json.RawMessage,
+	errorValue json.RawMessage,
 ) (*Event, error) {
 	return m.fn(m, routeType, route, request, response, errorValue)
 }
@@ -85,10 +84,10 @@ func TestPublish_PublishesEvent(t *testing.T) {
 	}
 
 	cfg := struct {
-		BaseURL       string         `json:"base_url"`
-		EventsPath    string         `json:"events_path"`
-		TargetRoutes  []config.Route `json:"target"`
-		SampledRoutes []config.Route `json:"sampled"`
+		BaseURL      string         `json:"base_url"`
+		EventsPath   string         `json:"events_path"`
+		TargetRoutes []config.Route `json:"target"`
+		SampleRoutes []config.Route `json:"sample"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -101,7 +100,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 				Path:       "/events/:id",
 			},
 		},
-		SampledRoutes: []config.Route{
+		SampleRoutes: []config.Route{
 			{
 				HTTPMethod: http.MethodGet,
 				Path:       "/events",
@@ -129,6 +128,9 @@ func TestPublish_PublishesEvent(t *testing.T) {
 			}
 		]`)
 	}
+
+	gwRes, _ := json.Marshal(expectedEvent.Response.(events.APIGatewayProxyResponse))
+	errRes, _ := json.Marshal(expectedEvent.Error)
 
 	m := &test.MockTransport{
 		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
@@ -196,16 +198,16 @@ func TestPublish_PublishesEvent(t *testing.T) {
 			routeType RouteType,
 			route *config.Route,
 			request interface{},
-			response interface{},
-			errorValue interface{},
+			response json.RawMessage,
+			errorValue json.RawMessage,
 		) (*Event, error) {
 			m.MethodCalled(
 				"Build",
 				routeType,
 				route,
 				request,
-				response,
-				errorValue,
+				gwRes,
+				errRes,
 			)
 
 			e := expectedEvent
@@ -220,8 +222,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		expectedEvent.RouteType,
 		expectedEvent.Route,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
-		expectedEvent.Response.(events.APIGatewayProxyResponse),
-		expectedEvent.Error,
+		gwRes,
+		errRes,
 	).Return(expectedEvent, nil).Once()
 
 	p, err := NewEventPublisher([]EventBuilder{b})
@@ -239,8 +241,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		expectedEvent.RouteType,
 		expectedEvent.Route,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
-		expectedEvent.Response.(events.APIGatewayProxyResponse),
-		expectedEvent.Error,
+		gwRes,
+		errRes,
 	)
 
 	wg.Wait()
@@ -287,10 +289,10 @@ func TestFlush_PublishesEvent(t *testing.T) {
 	}
 
 	cfg := struct {
-		BaseURL       string         `json:"base_url"`
-		EventsPath    string         `json:"events_path"`
-		TargetRoutes  []config.Route `json:"target"`
-		SampledRoutes []config.Route `json:"sampled"`
+		BaseURL      string         `json:"base_url"`
+		EventsPath   string         `json:"events_path"`
+		TargetRoutes []config.Route `json:"target"`
+		SampleRoutes []config.Route `json:"sample"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -303,7 +305,7 @@ func TestFlush_PublishesEvent(t *testing.T) {
 				Path:       "/events/:id",
 			},
 		},
-		SampledRoutes: []config.Route{
+		SampleRoutes: []config.Route{
 			{
 				HTTPMethod: http.MethodGet,
 				Path:       "/events",
@@ -331,6 +333,9 @@ func TestFlush_PublishesEvent(t *testing.T) {
 		]`)
 	}
 
+	gwRes, _ := json.Marshal(expectedEvent.Response.(events.APIGatewayProxyResponse))
+	errRes, _ := json.Marshal(expectedEvent.Error)
+
 	m := &test.MockTransport{
 		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
 			m.MethodCalled("RoundTrip", req)
@@ -341,7 +346,6 @@ func TestFlush_PublishesEvent(t *testing.T) {
 			case config.ConfigURL:
 				statusCode, responseBody = configResponse()
 			case config.EventsURL:
-				log.Printf("\n\nhello\n\n")
 				reqBody, err := ioutil.ReadAll(req.Body)
 				assert.NoError(t, err)
 
@@ -398,16 +402,16 @@ func TestFlush_PublishesEvent(t *testing.T) {
 			routeType RouteType,
 			route *config.Route,
 			request interface{},
-			response interface{},
-			errorValue interface{},
+			response json.RawMessage,
+			errorValue json.RawMessage,
 		) (*Event, error) {
 			m.MethodCalled(
 				"Build",
 				routeType,
 				route,
 				request,
-				response,
-				errorValue,
+				gwRes,
+				errRes,
 			)
 
 			e := expectedEvent
@@ -422,8 +426,8 @@ func TestFlush_PublishesEvent(t *testing.T) {
 		expectedEvent.RouteType,
 		expectedEvent.Route,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
-		expectedEvent.Response.(events.APIGatewayProxyResponse),
-		expectedEvent.Error,
+		gwRes,
+		errRes,
 	).Return(expectedEvent, nil).Once()
 
 	p, err := NewEventPublisher([]EventBuilder{b})
@@ -433,8 +437,8 @@ func TestFlush_PublishesEvent(t *testing.T) {
 		expectedEvent.RouteType,
 		expectedEvent.Route,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
-		expectedEvent.Response.(events.APIGatewayProxyResponse),
-		expectedEvent.Error,
+		gwRes,
+		errRes,
 	)
 
 	p.Flush()

@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -17,8 +18,8 @@ type Publisher interface {
 		routeType RouteType,
 		route *config.Route,
 		request interface{},
-		response interface{},
-		errorValue interface{},
+		response json.RawMessage,
+		errorValue json.RawMessage,
 	)
 }
 
@@ -199,8 +200,8 @@ func (p *EventPublisher) Publish(
 	routeType RouteType,
 	route *config.Route,
 	request interface{},
-	response interface{},
-	errorValue interface{},
+	response json.RawMessage,
+	errorValue json.RawMessage,
 ) {
 	var event *Event
 	var err error
