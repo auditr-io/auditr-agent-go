@@ -39,13 +39,13 @@ func (b *APIGatewayEventBuilder) Build(
 		RequestID:   req.RequestContext.RequestID,
 		RequestedAt: time.Now().UTC().Unix(),
 		RouteType:   routeType,
-		Route:       route,
+		HTTPMethod:  route.HTTPMethod,
+		RoutePath:   route.Path,
 		Request:     req,
 		Response:    response,
 		Error:       errorValue,
 	}
 
-	var actor *collect.Actor
 	// Default to cognito identity
 	// https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-with-identity-providers.html
 	if identity.CognitoIdentityID != "" {
@@ -53,29 +53,22 @@ func (b *APIGatewayEventBuilder) Build(
 		// get userinfo endpoint
 		// get userinfo w token
 		// populate fields
-		actor = &collect.Actor{
-			ID:       identity.CognitoIdentityID,
-			Name:     authorizer["name"].(string),
-			Username: authorizer["cognito:username"].(string),
-			Email:    authorizer["email"].(string),
-		}
+		event.ActorID = identity.CognitoIdentityID
+		event.ActorName = authorizer["name"].(string)
+		event.ActorUsername = authorizer["cognito:username"].(string)
+		event.ActorEmail = authorizer["email"].(string)
 	} else {
 		// Try custom authorizer principal next
 		principalID, ok := authorizer["principalId"]
 		if ok {
-			actor = &collect.Actor{
-				ID:       principalID.(string),
-				Username: principalID.(string),
-			}
+			event.ActorID = principalID.(string)
+			event.ActorUsername = principalID.(string)
 		} else {
 			// Finally, try IAM user
-			actor = &collect.Actor{
-				ID:       identity.UserArn,
-				Username: identity.User,
-			}
+			event.ActorID = identity.UserArn
+			event.ActorUsername = identity.User
 		}
 	}
-	event.Actor = actor
 
 	if req.RequestContext.RequestTimeEpoch > 0 {
 		event.RequestedAt = req.RequestContext.RequestTimeEpoch

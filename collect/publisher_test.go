@@ -68,19 +68,22 @@ func TestPublish_PublishesEvent(t *testing.T) {
 	}
 
 	expectedEvent := &Event{
-		Action:    expectedRequest.HTTPMethod,
-		Location:  expectedRequest.RequestContext.Identity.SourceIP,
-		RequestID: expectedRequest.RequestContext.RequestID,
-		RouteType: RouteTypeTarget,
-		Route: &config.Route{
-			HTTPMethod: expectedRequest.HTTPMethod,
-			Path:       "/person/:id",
-		},
-		Request:  expectedRequest,
-		Response: events.APIGatewayProxyResponse{},
+		Action:     expectedRequest.HTTPMethod,
+		Location:   expectedRequest.RequestContext.Identity.SourceIP,
+		RequestID:  expectedRequest.RequestContext.RequestID,
+		RouteType:  RouteTypeTarget,
+		HTTPMethod: expectedRequest.HTTPMethod,
+		RoutePath:  "/person/:id",
+		Request:    expectedRequest,
+		Response:   events.APIGatewayProxyResponse{},
 		Error: errorMessage{
 			Error: "test error",
 		},
+	}
+
+	expectedRoute := &config.Route{
+		HTTPMethod: expectedEvent.HTTPMethod,
+		Path:       expectedEvent.RoutePath,
 	}
 
 	cfg := struct {
@@ -220,7 +223,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 	b.On(
 		"Build",
 		expectedEvent.RouteType,
-		expectedEvent.Route,
+		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
 		gwRes,
 		errRes,
@@ -239,7 +242,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 
 	p.Publish(
 		expectedEvent.RouteType,
-		expectedEvent.Route,
+		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
 		gwRes,
 		errRes,
@@ -273,19 +276,22 @@ func TestFlush_PublishesEvent(t *testing.T) {
 	}
 
 	expectedEvent := &Event{
-		Action:    expectedRequest.HTTPMethod,
-		Location:  expectedRequest.RequestContext.Identity.SourceIP,
-		RequestID: expectedRequest.RequestContext.RequestID,
-		RouteType: RouteTypeTarget,
-		Route: &config.Route{
-			HTTPMethod: expectedRequest.HTTPMethod,
-			Path:       "/person/:id",
-		},
-		Request:  expectedRequest,
-		Response: events.APIGatewayProxyResponse{},
+		Action:     expectedRequest.HTTPMethod,
+		Location:   expectedRequest.RequestContext.Identity.SourceIP,
+		RequestID:  expectedRequest.RequestContext.RequestID,
+		RouteType:  RouteTypeTarget,
+		HTTPMethod: expectedRequest.HTTPMethod,
+		RoutePath:  "/person/:id",
+		Request:    expectedRequest,
+		Response:   events.APIGatewayProxyResponse{},
 		Error: errorMessage{
 			Error: "test error",
 		},
+	}
+
+	expectedRoute := &config.Route{
+		HTTPMethod: expectedEvent.HTTPMethod,
+		Path:       expectedEvent.RoutePath,
 	}
 
 	cfg := struct {
@@ -424,7 +430,7 @@ func TestFlush_PublishesEvent(t *testing.T) {
 	b.On(
 		"Build",
 		expectedEvent.RouteType,
-		expectedEvent.Route,
+		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
 		gwRes,
 		errRes,
@@ -435,7 +441,7 @@ func TestFlush_PublishesEvent(t *testing.T) {
 
 	p.Publish(
 		expectedEvent.RouteType,
-		expectedEvent.Route,
+		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
 		gwRes,
 		errRes,

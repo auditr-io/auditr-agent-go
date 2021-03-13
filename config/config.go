@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2/clientcredentials"
 )
@@ -110,22 +111,36 @@ func Init(options ...ConfigOption) error {
 		TokenURL:     TokenURL,
 	}
 
+	const maxAttempts = uint64(2)
 	ctx := context.Background()
-	const maxAttempts = 2
-	for i := 0; i <= maxAttempts; i++ {
-		if err := getConfig(ctx); err != nil {
-			log.Println(err)
-			if i == maxAttempts {
-				log.Fatalf("Failed to get configuration after %d attempts: %s",
-					maxAttempts,
-					err,
-				)
-			}
-			continue
-		}
-
-		break
+	bc := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
+	bo := backoff.WithMaxRetries(bc, maxAttempts)
+	op := func() error {
+		return getConfig(ctx)
 	}
+
+	if err := backoff.Retry(op, bo); err != nil {
+		log.Fatalf("Failed to get configuration after %d attempts: %s",
+			maxAttempts,
+			err,
+		)
+		return err
+	}
+	// const maxAttempts = 2
+	// for i := 0; i <= maxAttempts; i++ {
+	// 	if err := getConfig(ctx); err != nil {
+	// 		log.Println(err)
+	// 		if i == maxAttempts {
+	// 			log.Fatalf("Failed to get configuration after %d attempts: %s",
+	// 				maxAttempts,
+	// 				err,
+	// 			)
+	// 		}
+	// 		continue
+	// 	}
+
+	// 	break
+	// }
 
 	return nil
 }

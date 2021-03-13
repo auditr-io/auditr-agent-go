@@ -8,17 +8,6 @@ import (
 	"github.com/auditr-io/auditr-agent-go/config"
 )
 
-// RouteType describes the type of route; either target or sample
-type RouteType string
-
-const (
-	// RouteTypeTarget is a route that is targeted
-	RouteTypeTarget RouteType = "target"
-
-	// RouteTypeSample is a route that is sample
-	RouteTypeSample RouteType = "sample"
-)
-
 // Param is a single URL parameter, consisting of a key and a value.
 type Param struct {
 	Key   string

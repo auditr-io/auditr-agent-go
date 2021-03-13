@@ -1,27 +1,31 @@
 package collect
 
-import "github.com/auditr-io/auditr-agent-go/config"
-
 // Event is an audit event
 type Event struct {
-	ID          string        `json:"id"`
-	Action      string        `json:"action"`
-	Actor       *Actor        `json:"actor"`
-	ActorID     string        `json:"actor_id"`
-	RouteType   RouteType     `json:"route_type"`
-	Route       *config.Route `json:"route"`
-	Location    string        `json:"location"`
-	RequestID   string        `json:"request_id"`
-	RequestedAt int64         `json:"requested_at"`
-	Request     interface{}   `json:"request"`
-	Response    interface{}   `json:"response"`
-	Error       interface{}   `json:"error"`
+	ID            string      `json:"id"`
+	Action        string      `json:"action"`
+	ActorID       string      `json:"actor_id"`
+	ActorName     string      `json:"actor_name"`
+	ActorUsername string      `json:"actor_username"`
+	ActorEmail    string      `json:"actor_email"`
+	RouteType     RouteType   `json:"route_type"`
+	HTTPMethod    string      `json:"http_method"`
+	RoutePath     string      `json:"route_path"`
+	Location      string      `json:"location"`
+	RequestID     string      `json:"request_id"`
+	RequestedAt   int64       `json:"requested_at"`
+	Request       interface{} `json:"request"`
+	Response      interface{} `json:"response"`
+	Error         interface{} `json:"error"`
 }
 
-// Actor is the user originating the action
-type Actor struct {
-	ID       string `json:"actor_id"`
-	Name     string `json:"name"`
-	Username string `json:"username,omitempty"`
-	Email    string `json:"email,omitempty"`
-}
+// RouteType describes the type of route; either target or sample
+type RouteType string
+
+const (
+	// RouteTypeTarget is a route that is targeted
+	RouteTypeTarget RouteType = "target"
+
+	// RouteTypeSample is a route that is sample
+	RouteTypeSample RouteType = "sample"
+)
