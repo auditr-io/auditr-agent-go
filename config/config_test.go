@@ -112,10 +112,11 @@ func TestSeedConfig(t *testing.T) {
 
 func TestAcquiredConfig(t *testing.T) {
 	expected := struct {
-		BaseURL      string  `json:"base_url"`
-		EventsPath   string  `json:"events_path"`
-		TargetRoutes []Route `json:"target"`
-		SampleRoutes []Route `json:"sample"`
+		BaseURL       string  `json:"base_url"`
+		EventsPath    string  `json:"events_path"`
+		TargetRoutes  []Route `json:"target"`
+		SampleRoutes  []Route `json:"sample"`
+		CacheDuration int64   `json:"cache_duration"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -137,6 +138,7 @@ func TestAcquiredConfig(t *testing.T) {
 				Path:       "/events/:id",
 			},
 		},
+		CacheDuration: int64(3 * 60),
 	}
 
 	configResponse := func() (int, []byte) {

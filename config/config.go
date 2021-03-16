@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/spf13/viper"
@@ -27,10 +28,11 @@ type Route struct {
 
 // config is used to unmarshal acquired configuration
 type config struct {
-	BaseURL      string  `json:"base_url"`
-	EventsPath   string  `json:"events_path"`
-	TargetRoutes []Route `json:"target"`
-	SampleRoutes []Route `json:"sample"`
+	BaseURL       string  `json:"base_url"`
+	EventsPath    string  `json:"events_path"`
+	TargetRoutes  []Route `json:"target"`
+	SampleRoutes  []Route `json:"sample"`
+	CacheDuration int64   `json:"cache_duration"`
 }
 
 // ConfigOption is an option to override defaults
@@ -55,10 +57,12 @@ var (
 
 // Acquired configuration
 var (
-	BaseURL      string
-	EventsURL    string
-	TargetRoutes []Route
-	SampleRoutes []Route
+	BaseURL       string
+	EventsURL     string
+	TargetRoutes  []Route
+	SampleRoutes  []Route
+	cacheDuration time.Duration = 5 * 60 * time.Second
+	cacheTicker   *time.Ticker
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -111,38 +115,8 @@ func Init(options ...ConfigOption) error {
 		TokenURL:     TokenURL,
 	}
 
-	const maxAttempts = uint64(2)
 	ctx := context.Background()
-	bc := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
-	bo := backoff.WithMaxRetries(bc, maxAttempts)
-	op := func() error {
-		return getConfig(ctx)
-	}
-
-	if err := backoff.Retry(op, bo); err != nil {
-		log.Fatalf("Failed to get configuration after %d attempts: %s",
-			maxAttempts,
-			err,
-		)
-		return err
-	}
-	// const maxAttempts = 2
-	// for i := 0; i <= maxAttempts; i++ {
-	// 	if err := getConfig(ctx); err != nil {
-	// 		log.Println(err)
-	// 		if i == maxAttempts {
-	// 			log.Fatalf("Failed to get configuration after %d attempts: %s",
-	// 				maxAttempts,
-	// 				err,
-	// 			)
-	// 		}
-	// 		continue
-	// 	}
-
-	// 	break
-	// }
-
-	return nil
+	return configure(ctx)
 }
 
 // DefaultClientProvider returns the default HTTP client with authorization parameters
@@ -169,6 +143,24 @@ func ensureSeedConfig() {
 	if ClientSecret == "" {
 		log.Fatal("ClientSecret must be set using AUDITR_CLIENT_SECRET")
 	}
+}
+
+func configure(ctx context.Context) error {
+	const maxAttempts = uint64(2)
+	bc := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
+	bo := backoff.WithMaxRetries(bc, maxAttempts)
+	op := func() error {
+		return getConfig(ctx)
+	}
+
+	if err := backoff.Retry(op, bo); err != nil {
+		log.Fatalf("Failed to get configuration after %d attempts: %s",
+			maxAttempts,
+			err,
+		)
+	}
+
+	return nil
 }
 
 // getConfig acquires configuration from the seed URL
@@ -216,6 +208,29 @@ func getConfig(ctx context.Context) error {
 
 	TargetRoutes = c.TargetRoutes
 	SampleRoutes = c.SampleRoutes
+	if c.CacheDuration > 0 {
+		cacheDuration = time.Duration(c.CacheDuration * int64(time.Second))
+	}
+
+	refresh(ctx)
 
 	return nil
+}
+
+func refresh(ctx context.Context) {
+	if cacheTicker != nil {
+		cacheTicker.Stop()
+	}
+	cacheTicker = time.NewTicker(cacheDuration)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-cacheTicker.C:
+				configure(ctx)
+			}
+		}
+	}()
 }
