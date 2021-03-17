@@ -153,12 +153,15 @@ func configure(ctx context.Context) error {
 		return getConfig(ctx)
 	}
 
+	t := time.Now()
+	log.Println("configuring")
 	if err := backoff.Retry(op, bo); err != nil {
 		log.Fatalf("Failed to get configuration after %d attempts: %s",
 			maxAttempts,
 			err,
 		)
 	}
+	log.Printf("configured [%dms]", time.Since(t).Milliseconds())
 
 	return nil
 }
