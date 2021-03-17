@@ -110,6 +110,8 @@ func Init(options ...ConfigOption) error {
 	ClientSecret = viper.GetString("auditr_client_secret")
 
 	ensureSeedConfig()
+	ctx := context.Background()
+	err := configure(ctx)
 
 	auth = &clientcredentials.Config{
 		ClientID:     ClientID,
@@ -118,13 +120,12 @@ func Init(options ...ConfigOption) error {
 		TokenURL:     TokenURL,
 	}
 
-	ctx := context.Background()
 	defer func() {
 		// warm auth
 		go auth.TokenSource(ctx)
 	}()
 
-	return configure(ctx)
+	return err
 }
 
 // DefaultClientProvider returns the default HTTP client with authorization parameters
