@@ -119,8 +119,11 @@ func Init(options ...ConfigOption) error {
 	}
 
 	ctx := context.Background()
-	// warm auth
-	go auth.TokenSource(ctx)
+	defer func() {
+		// warm auth
+		go auth.TokenSource(ctx)
+	}()
+
 	return configure(ctx)
 }
 
