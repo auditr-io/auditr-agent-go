@@ -120,11 +120,6 @@ func Init(options ...ConfigOption) error {
 		TokenURL:     TokenURL,
 	}
 
-	defer func() {
-		// warm auth
-		go auth.TokenSource(ctx)
-	}()
-
 	return err
 }
 
