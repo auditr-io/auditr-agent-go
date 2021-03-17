@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -50,6 +51,7 @@ var (
 	ClientID     string
 	ClientSecret string
 	GetClient    ClientProvider = DefaultClientProvider
+	configClient ClientProvider = DefaultConfigClientProvider
 
 	// auth is an OAuth2 Client Credentials client
 	auth *clientcredentials.Config
@@ -69,6 +71,7 @@ var (
 func WithHTTPClient(client ClientProvider) ConfigOption {
 	return func(args ...interface{}) error {
 		GetClient = client
+		configClient = client
 		return nil
 	}
 }
@@ -116,12 +119,19 @@ func Init(options ...ConfigOption) error {
 	}
 
 	ctx := context.Background()
+	// warm auth
+	go auth.TokenSource(ctx)
 	return configure(ctx)
 }
 
 // DefaultClientProvider returns the default HTTP client with authorization parameters
 func DefaultClientProvider(ctx context.Context) *http.Client {
 	return auth.Client(ctx)
+}
+
+// DefaultConfigClientProvider returns the default HTTP client with authorization parameters
+func DefaultConfigClientProvider(ctx context.Context) *http.Client {
+	return http.DefaultClient
 }
 
 // ensureSeedConfig ensures seed config is provided
@@ -174,10 +184,12 @@ func getConfig(ctx context.Context) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	sec := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", ClientID, ClientSecret)))
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", sec))
 
 	t1 := time.Now()
 	log.Println("get config")
-	res, err := GetClient(ctx).Do(req)
+	res, err := configClient(ctx).Do(req)
 	log.Printf("got config [%dms]", time.Since(t1).Milliseconds())
 	if err != nil {
 		log.Printf("Error getting config: %s", err)
