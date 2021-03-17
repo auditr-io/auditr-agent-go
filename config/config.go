@@ -175,7 +175,14 @@ func getConfig(ctx context.Context) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := GetClient(ctx).Do(req)
+	t1 := time.Now()
+	log.Println("get client")
+	client := GetClient(ctx)
+	log.Printf("got client [%dms]", time.Since(t1).Milliseconds())
+	t2 := time.Now()
+	log.Println("get config")
+	res, err := client.Do(req)
+	log.Printf("got config [%dms]", time.Since(t2).Milliseconds())
 	if err != nil {
 		log.Printf("Error getting config: %s", err)
 		return err
