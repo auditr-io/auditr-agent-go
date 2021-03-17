@@ -176,13 +176,9 @@ func getConfig(ctx context.Context) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	t1 := time.Now()
-	log.Println("get client")
-	client := GetClient(ctx)
-	log.Printf("got client [%dms]", time.Since(t1).Milliseconds())
-	t2 := time.Now()
 	log.Println("get config")
-	res, err := client.Do(req)
-	log.Printf("got config [%dms]", time.Since(t2).Milliseconds())
+	res, err := GetClient(ctx).Do(req)
+	log.Printf("got config [%dms]", time.Since(t1).Milliseconds())
 	if err != nil {
 		log.Printf("Error getting config: %s", err)
 		return err
@@ -229,9 +225,10 @@ func getConfig(ctx context.Context) error {
 
 func refresh(ctx context.Context) {
 	if cacheTicker != nil {
-		cacheTicker.Stop()
+		cacheTicker.Reset(cacheDuration)
+	} else {
+		cacheTicker = time.NewTicker(cacheDuration)
 	}
-	cacheTicker = time.NewTicker(cacheDuration)
 
 	go func() {
 		for {
@@ -239,7 +236,9 @@ func refresh(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-cacheTicker.C:
+				cacheTicker.Stop()
 				configure(ctx)
+				cacheTicker.Reset(cacheDuration)
 			}
 		}
 	}()
