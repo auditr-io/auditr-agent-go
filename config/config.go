@@ -67,7 +67,7 @@ var (
 	cacheDuration time.Duration = 5 * 60 * time.Second
 	cacheTicker   *time.Ticker
 	cancelFunc    context.CancelFunc
-	// filec         chan struct{}
+	filec         chan struct{}
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -122,7 +122,9 @@ func Init(options ...ConfigOption) error {
 	if clientOverriden {
 		configure(ctx)
 	} else {
+		filec = make(chan struct{})
 		configureFromFile(ctx)
+		<-filec
 	}
 	// <-filec
 	// err := configure(ctx)
@@ -210,6 +212,7 @@ func configureFromFile(ctx context.Context) error {
 						return
 					}
 					setConfig(body)
+					filec <- struct{}{}
 					tkr.Stop()
 					return
 				}
