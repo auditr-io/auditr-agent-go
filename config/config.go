@@ -65,6 +65,7 @@ var (
 	SampleRoutes  []Route
 	cacheDuration time.Duration = 5 * 60 * time.Second
 	cacheTicker   *time.Ticker
+	cancelFunc    context.CancelFunc
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -111,6 +112,7 @@ func Init(options ...ConfigOption) error {
 
 	ensureSeedConfig()
 	ctx := context.Background()
+	ctx, cancelFunc = context.WithCancel(ctx)
 	configureFromFile(ctx)
 	err := configure(ctx)
 
@@ -191,6 +193,7 @@ func configureFromFile(ctx context.Context) error {
 					}
 					if len(body) == 0 {
 						log.Println("Body is still empty. Wait 10ms")
+						cancelFunc()
 						tkr.Reset(10 * time.Millisecond)
 						return
 					}
@@ -311,7 +314,7 @@ func getConfigFromFile() ([]byte, error) {
 }
 
 func getConfigFromURL(ctx context.Context) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, ConfigURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ConfigURL, nil)
 	if err != nil {
 		log.Printf("Error creating request: %s", err)
 		return nil, err
