@@ -182,7 +182,7 @@ func configure(ctx context.Context) error {
 }
 
 func configureFromFile(ctx context.Context) error {
-	tkr := time.NewTicker(50 * time.Millisecond)
+	tkr := time.NewTicker(100 * time.Millisecond)
 	go func() {
 		for {
 			select {
@@ -205,6 +205,7 @@ func configureFromFile(ctx context.Context) error {
 					return
 				}
 
+				tkr.Reset(10 * time.Millisecond)
 				filec <- struct{}{}
 			}
 		}
