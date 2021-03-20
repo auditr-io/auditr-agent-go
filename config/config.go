@@ -192,7 +192,8 @@ func configureFromFile(ctx context.Context) error {
 					return
 				}
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					getConfig(ctx)
+					body, _ := getConfigFromFile()
+					setConfig(body)
 				}
 			}
 		}
@@ -206,13 +207,36 @@ func configureFromFile(ctx context.Context) error {
 	return nil
 }
 
+func setConfig(body []byte) error {
+	var c *config
+	err := json.Unmarshal(body, &c)
+	if err != nil {
+		log.Printf("Error unmarshalling body - Error: %s, Body: %s", err, string(body))
+		return err
+	}
+
+	BaseURL = c.BaseURL
+
+	url, err := url.Parse(c.BaseURL)
+	if err != nil {
+		log.Printf("Error parsing BaseURL: %s", c.BaseURL)
+		return err
+	}
+	url.Path = path.Join(url.Path, c.EventsPath)
+	EventsURL = url.String()
+
+	TargetRoutes = c.TargetRoutes
+	SampleRoutes = c.SampleRoutes
+	if c.CacheDuration > 0 {
+		cacheDuration = time.Duration(c.CacheDuration * int64(time.Second))
+	}
+
+	return nil
+}
+
 // getConfig acquires configuration from the seed URL
 func getConfig(ctx context.Context) error {
-	body, err := getConfigFromFile()
-	if err != nil {
-		log.Printf("Error getting config from file %v", err)
-		body, err = getConfigFromURL(ctx)
-	}
+	body, err := getConfigFromURL(ctx)
 
 	var c *config
 	err = json.Unmarshal(body, &c)
