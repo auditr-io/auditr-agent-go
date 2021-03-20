@@ -184,7 +184,11 @@ func configureFromFile(ctx context.Context) error {
 			case <-tkr.C:
 				if _, err := os.Stat("/tmp/config"); err == nil {
 					log.Println("config file found")
-					body, _ := getConfigFromFile()
+					body, err := getConfigFromFile()
+					if err != nil {
+						log.Println("Error reading config file", err)
+						return
+					}
 					setConfig(body)
 					tkr.Stop()
 					return
