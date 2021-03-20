@@ -177,33 +177,9 @@ func configure(ctx context.Context) error {
 
 // getConfig acquires configuration from the seed URL
 func getConfig(ctx context.Context) error {
-	req, err := http.NewRequest(http.MethodGet, ConfigURL, nil)
+	body, err := getConfigFromFile()
 	if err != nil {
-		log.Printf("Error creating request: %s", err)
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	sec := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", ClientID, ClientSecret)))
-	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", sec))
-
-	t1 := time.Now()
-	log.Println("get config")
-	res, err := configClient(ctx).Do(req)
-	log.Printf("got config [%dms]", time.Since(t1).Milliseconds())
-	if err != nil {
-		log.Printf("Error getting config: %s", err)
-		return err
-	}
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		if err != nil {
-			log.Printf("Error reading response: %s", err)
-			return err
-		}
-
-		return fmt.Errorf("Error getting config - Status: %d, Response: %s", res.StatusCode, string(body))
+		body, err = getConfigFromURL(ctx)
 	}
 
 	var c *config
@@ -232,6 +208,53 @@ func getConfig(ctx context.Context) error {
 	refresh(ctx)
 
 	return nil
+}
+
+func getConfigFromFile() ([]byte, error) {
+	cfg, err := os.Open("/tmp/config")
+	if err != nil {
+		return nil, err
+	}
+	defer cfg.Close()
+	body, err := ioutil.ReadAll(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return body, nil
+}
+
+func getConfigFromURL(ctx context.Context) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, ConfigURL, nil)
+	if err != nil {
+		log.Printf("Error creating request: %s", err)
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	sec := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", ClientID, ClientSecret)))
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", sec))
+
+	t1 := time.Now()
+	log.Println("get config")
+	res, err := configClient(ctx).Do(req)
+	log.Printf("got config [%dms]", time.Since(t1).Milliseconds())
+	if err != nil {
+		log.Printf("Error getting config: %s", err)
+		return nil, err
+	}
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		if err != nil {
+			log.Printf("Error reading response: %s", err)
+			return nil, err
+		}
+
+		return nil, fmt.Errorf("Error getting config - Status: %d, Response: %s", res.StatusCode, string(body))
+	}
+
+	return body, nil
 }
 
 func refresh(ctx context.Context) {
