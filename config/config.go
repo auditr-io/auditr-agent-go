@@ -112,8 +112,8 @@ func Init(options ...ConfigOption) error {
 
 	ensureSeedConfig()
 	ctx := context.Background()
-	err := configure(ctx)
 	configureFromFile(ctx)
+	err := configure(ctx)
 
 	auth = &clientcredentials.Config{
 		ClientID:     ClientID,
