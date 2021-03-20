@@ -211,6 +211,8 @@ func getConfig(ctx context.Context) error {
 }
 
 func getConfigFromFile() ([]byte, error) {
+	t1 := time.Now()
+	log.Println("get config file")
 	cfg, err := os.Open("/tmp/config")
 	if err != nil {
 		return nil, err
@@ -221,6 +223,7 @@ func getConfigFromFile() ([]byte, error) {
 		return nil, err
 	}
 
+	log.Printf("got config file [%dms]", time.Since(t1).Milliseconds())
 	return body, nil
 }
 
@@ -235,9 +238,9 @@ func getConfigFromURL(ctx context.Context) ([]byte, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", sec))
 
 	t1 := time.Now()
-	log.Println("get config")
+	log.Println("get config url")
 	res, err := configClient(ctx).Do(req)
-	log.Printf("got config [%dms]", time.Since(t1).Milliseconds())
+	log.Printf("got config url [%dms]", time.Since(t1).Milliseconds())
 	if err != nil {
 		log.Printf("Error getting config: %s", err)
 		return nil, err

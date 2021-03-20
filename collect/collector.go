@@ -16,20 +16,20 @@ type Collector struct {
 	publisher     Publisher
 
 	setupReadyc chan struct{}
-	pendingc    chan pendingEvent
+	// pendingc    chan pendingEvent
 }
 
-type pendingEvent struct {
-	ctx        context.Context
-	httpMethod string
-	path       string
-	resource   string
-	request    interface{}
-	response   json.RawMessage
-	errorValue json.RawMessage
-}
+// type pendingEvent struct {
+// 	ctx        context.Context
+// 	httpMethod string
+// 	path       string
+// 	resource   string
+// 	request    interface{}
+// 	response   json.RawMessage
+// 	errorValue json.RawMessage
+// }
 
-const maxPendingEvents = 50 // 50 events in a sec
+// const maxPendingEvents = 50 // 50 events in a sec
 
 // CollectorOption is an option to override defaults
 type CollectorOption func(*Collector) error
@@ -45,7 +45,7 @@ func NewCollector(
 	c := &Collector{
 		configOptions: []config.ConfigOption{},
 		setupReadyc:   make(chan struct{}, 1),
-		pendingc:      make(chan pendingEvent, maxPendingEvents),
+		// pendingc:      make(chan pendingEvent, maxPendingEvents),
 	}
 
 	for _, opt := range options {
@@ -62,7 +62,7 @@ func NewCollector(
 			config.SampleRoutes,
 		)
 
-		go c.drainPending()
+		// go c.drainPending()
 		close(c.setupReadyc)
 	}()
 
@@ -97,44 +97,53 @@ func (c *Collector) Collect(
 	response json.RawMessage,
 	errorValue json.RawMessage,
 ) {
-	select {
-	case <-c.setupReadyc:
-		c.capture(
-			ctx,
-			httpMethod,
-			path,
-			resource,
-			request,
-			response,
-			errorValue,
-		)
-	default:
-		// stash in chan
-		c.pendingc <- pendingEvent{
-			ctx,
-			httpMethod,
-			path,
-			resource,
-			request,
-			response,
-			errorValue,
-		}
-	}
+	c.capture(
+		ctx,
+		httpMethod,
+		path,
+		resource,
+		request,
+		response,
+		errorValue,
+	)
+	// select {
+	// case <-c.setupReadyc:
+	// 	c.capture(
+	// 		ctx,
+	// 		httpMethod,
+	// 		path,
+	// 		resource,
+	// 		request,
+	// 		response,
+	// 		errorValue,
+	// 	)
+	// default:
+	// 	// stash in chan
+	// 	c.pendingc <- pendingEvent{
+	// 		ctx,
+	// 		httpMethod,
+	// 		path,
+	// 		resource,
+	// 		request,
+	// 		response,
+	// 		errorValue,
+	// 	}
+	// }
 }
 
-func (c *Collector) drainPending() {
-	for e := range c.pendingc {
-		c.capture(
-			e.ctx,
-			e.httpMethod,
-			e.path,
-			e.resource,
-			e.request,
-			e.response,
-			e.errorValue,
-		)
-	}
-}
+// func (c *Collector) drainPending() {
+// 	for e := range c.pendingc {
+// 		c.capture(
+// 			e.ctx,
+// 			e.httpMethod,
+// 			e.path,
+// 			e.resource,
+// 			e.request,
+// 			e.response,
+// 			e.errorValue,
+// 		)
+// 	}
+// }
 
 func (c *Collector) capture(
 	ctx context.Context,
@@ -145,6 +154,7 @@ func (c *Collector) capture(
 	response json.RawMessage,
 	errorValue json.RawMessage,
 ) {
+	<-c.setupReadyc
 	route, err := c.router.FindRoute(RouteTypeTarget, httpMethod, path)
 	if err != nil {
 		panic(err)
