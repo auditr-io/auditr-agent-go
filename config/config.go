@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2/clientcredentials"
 )
@@ -112,6 +113,7 @@ func Init(options ...ConfigOption) error {
 	ensureSeedConfig()
 	ctx := context.Background()
 	err := configure(ctx)
+	configureFromFile(ctx)
 
 	auth = &clientcredentials.Config{
 		ClientID:     ClientID,
@@ -175,10 +177,40 @@ func configure(ctx context.Context) error {
 	return nil
 }
 
+func configureFromFile(ctx context.Context) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					getConfig(ctx)
+				}
+			}
+		}
+	}()
+
+	err = watcher.Add("/tmp/config")
+	if err != nil {
+		log.Println(err)
+	}
+
+	return nil
+}
+
 // getConfig acquires configuration from the seed URL
 func getConfig(ctx context.Context) error {
 	body, err := getConfigFromFile()
 	if err != nil {
+		log.Printf("Error getting config from file %v", err)
 		body, err = getConfigFromURL(ctx)
 	}
 
