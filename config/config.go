@@ -193,13 +193,15 @@ func configure(ctx context.Context) error {
 }
 
 func configureFromFile(ctx context.Context) error {
+	t1 := time.Now()
+	log.Println("waiting for config file")
 	tkr := time.NewTicker(100 * time.Millisecond)
 	go func() {
 		for {
 			select {
 			case <-tkr.C:
 				if _, err := os.Stat("/tmp/config"); err == nil {
-					log.Println("config file found")
+					log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
 					body, err := getConfigFromFile()
 					if err != nil {
 						log.Println("Error reading config file", err)
