@@ -189,6 +189,11 @@ func configureFromFile(ctx context.Context) error {
 						log.Println("Error reading config file", err)
 						return
 					}
+					if len(body) == 0 {
+						log.Println("Body is still empty. Wait 10ms")
+						tkr.Reset(10 * time.Millisecond)
+						return
+					}
 					setConfig(body)
 					tkr.Stop()
 					return
