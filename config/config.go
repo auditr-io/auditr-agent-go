@@ -48,10 +48,11 @@ var (
 	TokenURL string
 
 	// Client credentials
-	ClientID     string
-	ClientSecret string
-	GetClient    ClientProvider = DefaultClientProvider
-	configClient ClientProvider = DefaultConfigClientProvider
+	ClientID        string
+	ClientSecret    string
+	GetClient       ClientProvider = DefaultClientProvider
+	configClient    ClientProvider = DefaultConfigClientProvider
+	clientOverriden bool
 
 	// auth is an OAuth2 Client Credentials client
 	auth *clientcredentials.Config
@@ -74,6 +75,7 @@ func WithHTTPClient(client ClientProvider) ConfigOption {
 	return func(args ...interface{}) error {
 		GetClient = client
 		configClient = client
+		clientOverriden = true
 		return nil
 	}
 }
@@ -115,7 +117,13 @@ func Init(options ...ConfigOption) error {
 	ctx := context.Background()
 	ctx, cancelFunc = context.WithCancel(ctx)
 	// filec = make(chan struct{})
-	configureFromFile(ctx)
+	// configureFromFile(ctx)
+
+	if clientOverriden {
+		configure(ctx)
+	} else {
+		configureFromFile(ctx)
+	}
 	// <-filec
 	// err := configure(ctx)
 
