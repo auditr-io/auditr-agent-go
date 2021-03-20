@@ -66,7 +66,7 @@ var (
 	cacheDuration time.Duration = 5 * 60 * time.Second
 	cacheTicker   *time.Ticker
 	cancelFunc    context.CancelFunc
-	filec         chan struct{}
+	// filec         chan struct{}
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -114,10 +114,10 @@ func Init(options ...ConfigOption) error {
 	ensureSeedConfig()
 	ctx := context.Background()
 	ctx, cancelFunc = context.WithCancel(ctx)
-	filec = make(chan struct{})
+	// filec = make(chan struct{})
 	configureFromFile(ctx)
-	<-filec
-	err := configure(ctx)
+	// <-filec
+	// err := configure(ctx)
 
 	auth = &clientcredentials.Config{
 		ClientID:     ClientID,
@@ -126,7 +126,8 @@ func Init(options ...ConfigOption) error {
 		TokenURL:     TokenURL,
 	}
 
-	return err
+	// return err
+	return nil
 }
 
 // DefaultClientProvider returns the default HTTP client with authorization parameters
@@ -206,7 +207,7 @@ func configureFromFile(ctx context.Context) error {
 				}
 
 				tkr.Reset(10 * time.Millisecond)
-				filec <- struct{}{}
+				// filec <- struct{}{}
 			}
 		}
 	}()
