@@ -184,8 +184,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 
 	m.
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-		Return(mock.AnythingOfType("*http.Response"), nil).
-		Twice()
+		Return(mock.AnythingOfType("*http.Response"), nil)
+		// .Twice()
 
 	config.Init(
 		config.WithHTTPClient(func(ctx context.Context) *http.Client {
@@ -391,8 +391,8 @@ func TestFlush_PublishesEvent(t *testing.T) {
 
 	m.
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-		Return(mock.AnythingOfType("*http.Response"), nil).
-		Twice()
+		Return(mock.AnythingOfType("*http.Response"), nil)
+		// .Twice()
 
 	config.Init(
 		config.WithHTTPClient(func(ctx context.Context) *http.Client {

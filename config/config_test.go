@@ -63,8 +63,7 @@ func TestSeedConfig(t *testing.T) {
 
 	m.
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-		Return(mock.AnythingOfType("*http.Response"), nil).
-		Once()
+		Return(mock.AnythingOfType("*http.Response"), nil)
 
 	mockClient := func(ctx context.Context) *http.Client {
 		return &http.Client{
@@ -168,8 +167,8 @@ func TestAcquiredConfig(t *testing.T) {
 
 	m.
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-		Return(mock.AnythingOfType("*http.Response"), nil).
-		Once()
+		Return(mock.AnythingOfType("*http.Response"), nil)
+		// .Once()
 
 	mockClient := func(ctx context.Context) *http.Client {
 		return &http.Client{
@@ -182,7 +181,7 @@ func TestAcquiredConfig(t *testing.T) {
 	)
 
 	assert.NoError(t, err)
-	// assert.True(t, m.AssertExpectations(t))
+	assert.True(t, m.AssertExpectations(t))
 	// assert.Equal(t, expected.BaseURL, BaseURL)
 
 	// expectedEventsURL, err := url.Parse(expected.BaseURL)

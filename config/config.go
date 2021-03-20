@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -125,7 +126,18 @@ func Init(options ...ConfigOption) error {
 		Scopes:       []string{"/events/write"},
 		TokenURL:     TokenURL,
 	}
-	go auth.TokenSource(ctx)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://auditr.io", nil)
+		res, err := GetClient(ctx).Do(req)
+		if err == nil {
+			defer res.Body.Close()
+		}
+	}()
 
 	if clientOverriden {
 		configure(ctx)
@@ -138,6 +150,7 @@ func Init(options ...ConfigOption) error {
 	// err := configure(ctx)
 
 	// return err
+	wg.Wait()
 	return nil
 }
 

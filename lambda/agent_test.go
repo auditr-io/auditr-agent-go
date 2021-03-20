@@ -288,7 +288,8 @@ func TestAfterExecution_SkipsSampleAPIGatewayEvent(t *testing.T) {
 
 	m.
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-		Return(mock.AnythingOfType("*http.Response"), nil).Once()
+		Return(mock.AnythingOfType("*http.Response"), nil)
+		// .Once()
 
 	mockClient := func(ctx context.Context) *http.Client {
 		return &http.Client{
