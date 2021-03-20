@@ -191,7 +191,8 @@ func configureFromFile(ctx context.Context) error {
 				if !ok {
 					return
 				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				if event.Op&fsnotify.Write == fsnotify.Write ||
+					event.Op&fsnotify.Create == fsnotify.Create {
 					body, _ := getConfigFromFile()
 					setConfig(body)
 				}
