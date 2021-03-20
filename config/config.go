@@ -135,6 +135,7 @@ func Init(options ...ConfigOption) error {
 		Scopes:       []string{"/events/write"},
 		TokenURL:     TokenURL,
 	}
+	go auth.TokenSource(ctx)
 
 	// return err
 	return nil
@@ -209,7 +210,7 @@ func configureFromFile(ctx context.Context) error {
 					}
 					if len(body) == 0 {
 						log.Println("Body is still empty. Wait 10ms")
-						cancelFunc()
+						// cancelFunc()
 						tkr.Reset(10 * time.Millisecond)
 						return
 					}
