@@ -288,8 +288,7 @@ func TestAfterExecution_SkipsSampleAPIGatewayEvent(t *testing.T) {
 
 	m.
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-		Return(mock.AnythingOfType("*http.Response"), nil).
-		Once()
+		Return(mock.AnythingOfType("*http.Response"), nil).Once()
 
 	mockClient := func(ctx context.Context) *http.Client {
 		return &http.Client{
@@ -303,6 +302,8 @@ func TestAfterExecution_SkipsSampleAPIGatewayEvent(t *testing.T) {
 	assert.NoError(t, err)
 
 	a.AfterExecution(context.Background(), payload, payload, res, nil)
+
+	<-a.collector.SetupReady()
 	assert.True(t, m.AssertExpectations(t))
 }
 
@@ -401,8 +402,7 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 
 	m.
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-		Return(mock.AnythingOfType("*http.Response"), nil).
-		Twice()
+		Return(mock.AnythingOfType("*http.Response"), nil)
 
 	mockClient := func(ctx context.Context) *http.Client {
 		return &http.Client{
