@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2/clientcredentials"
 )
@@ -178,34 +177,52 @@ func configure(ctx context.Context) error {
 }
 
 func configureFromFile(ctx context.Context) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer watcher.Close()
-
+	tkr := time.NewTicker(50 * time.Millisecond)
 	go func() {
 		for {
 			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Op&fsnotify.Write == fsnotify.Write ||
-					event.Op&fsnotify.Create == fsnotify.Create {
+			case <-tkr.C:
+				if _, err := os.Stat("/tmp/config"); err == nil {
+					log.Println("config file found")
 					body, _ := getConfigFromFile()
 					setConfig(body)
+					tkr.Stop()
+					return
 				}
 			}
 		}
 	}()
 
-	err = watcher.Add("/tmp")
-	if err != nil {
-		log.Println("Error watching tmp", err)
-	}
-
 	return nil
+
+	// watcher, err := fsnotify.NewWatcher()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer watcher.Close()
+
+	// go func() {
+	// 	for {
+	// 		select {
+	// 		case event, ok := <-watcher.Events:
+	// 			if !ok {
+	// 				return
+	// 			}
+	// 			if event.Op&fsnotify.Write == fsnotify.Write ||
+	// 				event.Op&fsnotify.Create == fsnotify.Create {
+	// 				body, _ := getConfigFromFile()
+	// 				setConfig(body)
+	// 			}
+	// 		}
+	// 	}
+	// }()
+
+	// err = watcher.Add("/tmp")
+	// if err != nil {
+	// 	log.Println("Error watching tmp", err)
+	// }
+
+	// return nil
 }
 
 func setConfig(body []byte) error {
