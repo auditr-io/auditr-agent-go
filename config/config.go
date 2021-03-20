@@ -200,9 +200,9 @@ func configureFromFile(ctx context.Context) error {
 		}
 	}()
 
-	err = watcher.Add("/tmp/config")
+	err = watcher.Add("/tmp")
 	if err != nil {
-		log.Println(err)
+		log.Println("Error watching tmp", err)
 	}
 
 	return nil
