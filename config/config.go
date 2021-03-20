@@ -119,6 +119,14 @@ func Init(options ...ConfigOption) error {
 	// filec = make(chan struct{})
 	// configureFromFile(ctx)
 
+	auth = &clientcredentials.Config{
+		ClientID:     ClientID,
+		ClientSecret: ClientSecret,
+		Scopes:       []string{"/events/write"},
+		TokenURL:     TokenURL,
+	}
+	go auth.TokenSource(ctx)
+
 	if clientOverriden {
 		configure(ctx)
 	} else {
@@ -128,14 +136,6 @@ func Init(options ...ConfigOption) error {
 	}
 	// <-filec
 	// err := configure(ctx)
-
-	auth = &clientcredentials.Config{
-		ClientID:     ClientID,
-		ClientSecret: ClientSecret,
-		Scopes:       []string{"/events/write"},
-		TokenURL:     TokenURL,
-	}
-	go auth.TokenSource(ctx)
 
 	// return err
 	return nil
