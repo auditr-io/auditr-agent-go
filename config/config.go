@@ -274,15 +274,18 @@ func configureFromFile(ctx context.Context) error {
 						setConfig(body)
 					}
 
-					body, err = getTokenFromFile()
-					if err != nil {
-						log.Println("Error reading token file", err)
-						return
-					}
-					if len(body) == 0 {
-						log.Println("Token body is still empty. Wait 10ms")
-						tkr.Reset(10 * time.Millisecond)
-						return
+					if accessToken == "" {
+						body, err = getTokenFromFile()
+						if err != nil {
+							log.Println("Error reading token file", err)
+							return
+						}
+						if len(body) == 0 {
+							log.Println("Token body is still empty. Wait 10ms")
+							tkr.Reset(10 * time.Millisecond)
+							return
+						}
+						accessToken = string(body)
 					}
 
 					filec <- struct{}{}
