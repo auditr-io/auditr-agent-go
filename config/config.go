@@ -268,8 +268,6 @@ func configureFromFile(ctx context.Context) error {
 						if len(body) == 0 {
 							log.Println("Config body is still empty. Wait 10ms")
 							// cancelFunc()
-							tkr.Reset(10 * time.Millisecond)
-							return
 						}
 						setConfig(body)
 					}
@@ -282,10 +280,13 @@ func configureFromFile(ctx context.Context) error {
 						}
 						if len(body) == 0 {
 							log.Println("Token body is still empty. Wait 10ms")
-							tkr.Reset(10 * time.Millisecond)
-							return
 						}
 						accessToken = string(body)
+					}
+
+					if BaseURL == "" || accessToken == "" {
+						tkr.Reset(10 * time.Millisecond)
+						return
 					}
 
 					filec <- struct{}{}
