@@ -55,7 +55,9 @@ var (
 	clientOverriden bool
 
 	// auth is an OAuth2 Client Credentials client
-	auth *clientcredentials.Config
+	auth        *clientcredentials.Config
+	authClient  *http.Client
+	accessToken string
 )
 
 // Acquired configuration
@@ -153,9 +155,50 @@ func Init(options ...ConfigOption) error {
 	return nil
 }
 
+type Transport struct {
+	Base http.RoundTripper
+}
+
+func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	reqBodyClosed := false
+	if req.Body != nil {
+		defer func() {
+			if !reqBodyClosed {
+				req.Body.Close()
+			}
+		}()
+	}
+
+	req2 := cloneRequest(req)
+	req2.Header.Set("Authorization", "Bearer "+accessToken)
+
+	reqBodyClosed = true
+	return t.Base.RoundTrip(req2)
+}
+
+func cloneRequest(r *http.Request) *http.Request {
+	// shallow copy of the struct
+	r2 := new(http.Request)
+	*r2 = *r
+	// deep copy of the Header
+	r2.Header = make(http.Header, len(r.Header))
+	for k, s := range r.Header {
+		r2.Header[k] = append([]string(nil), s...)
+	}
+	return r2
+}
+
 // DefaultClientProvider returns the default HTTP client with authorization parameters
 func DefaultClientProvider(ctx context.Context) *http.Client {
-	return auth.Client(ctx)
+	if authClient == nil {
+		authClient = &http.Client{
+			Transport: &Transport{
+				Base: http.DefaultTransport,
+			},
+		}
+	}
+	return authClient
+	// return auth.Client(ctx)
 }
 
 // DefaultConfigClientProvider returns the default HTTP client with authorization parameters
@@ -227,6 +270,9 @@ func configureFromFile(ctx context.Context) error {
 						return
 					}
 					setConfig(body)
+
+					getTokenFromFile()
+
 					filec <- struct{}{}
 					tkr.Stop()
 					return
@@ -327,6 +373,24 @@ func getConfig(ctx context.Context) error {
 	refresh(ctx)
 
 	return nil
+}
+
+func getTokenFromFile() ([]byte, error) {
+	t1 := time.Now()
+	log.Println("get token file")
+	tok, err := os.Open("/tmp/token")
+	if err != nil {
+		return nil, err
+	}
+	defer tok.Close()
+	body, err := ioutil.ReadAll(tok)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("got token file [%dms]", time.Since(t1).Milliseconds())
+	accessToken = string(body)
+	return body, nil
 }
 
 func getConfigFromFile() ([]byte, error) {
