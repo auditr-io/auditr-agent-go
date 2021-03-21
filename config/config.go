@@ -257,45 +257,44 @@ func configureFromFile(ctx context.Context) error {
 			select {
 			case <-tkr.C:
 				if _, err := os.Stat("/tmp/config"); err == nil {
-					var body []byte
 					if BaseURL == "" {
 						log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
 						body, err := getConfigFromFile()
 						if err != nil {
 							log.Println("Error reading config file", err)
-							return
+						} else {
+							if len(body) == 0 {
+								log.Println("Config body is still empty. Wait 10ms")
+							} else {
+								setConfig(body)
+							}
 						}
-						if len(body) == 0 {
-							log.Println("Config body is still empty. Wait 10ms")
-							// cancelFunc()
-						}
-						setConfig(body)
 					}
+				}
 
+				if _, err := os.Stat("/tmp/token"); err == nil {
 					if accessToken == "" {
-						body, err = getTokenFromFile()
+						body, err := getTokenFromFile()
 						if err != nil {
 							log.Println("Error reading token file", err)
-							return
+						} else {
+							if len(body) == 0 {
+								log.Println("Token body is still empty. Wait 10ms")
+							} else {
+								accessToken = string(body)
+							}
 						}
-						if len(body) == 0 {
-							log.Println("Token body is still empty. Wait 10ms")
-						}
-						accessToken = string(body)
 					}
+				}
 
-					if BaseURL == "" || accessToken == "" {
-						tkr.Reset(10 * time.Millisecond)
-						return
-					}
-
-					filec <- struct{}{}
-					tkr.Stop()
+				if BaseURL == "" || accessToken == "" {
+					tkr.Reset(10 * time.Millisecond)
 					return
 				}
 
-				tkr.Reset(10 * time.Millisecond)
-				// filec <- struct{}{}
+				filec <- struct{}{}
+				tkr.Stop()
+				return
 			}
 		}
 	}()
