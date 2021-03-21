@@ -289,9 +289,10 @@ func configureFromFile(ctx context.Context) error {
 
 				if BaseURL == "" || accessToken == "" {
 					tkr.Reset(10 * time.Millisecond)
-					return
+					continue
 				}
 
+				log.Println("Configured")
 				filec <- struct{}{}
 				tkr.Stop()
 				return
