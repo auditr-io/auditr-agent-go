@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -127,17 +126,17 @@ func Init(options ...ConfigOption) error {
 		TokenURL:     TokenURL,
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	// var wg sync.WaitGroup
+	// wg.Add(1)
+	// go func() {
+	// 	defer wg.Done()
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://auditr.io", nil)
-		res, err := GetClient(ctx).Do(req)
-		if err == nil {
-			defer res.Body.Close()
-		}
-	}()
+	// 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://auditr.io", nil)
+	// 	res, err := GetClient(ctx).Do(req)
+	// 	if err == nil {
+	// 		defer res.Body.Close()
+	// 	}
+	// }()
 
 	if clientOverriden {
 		configure(ctx)
@@ -150,7 +149,7 @@ func Init(options ...ConfigOption) error {
 	// err := configure(ctx)
 
 	// return err
-	wg.Wait()
+	// wg.Wait()
 	return nil
 }
 
