@@ -257,21 +257,33 @@ func configureFromFile(ctx context.Context) error {
 			select {
 			case <-tkr.C:
 				if _, err := os.Stat("/tmp/config"); err == nil {
-					log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
-					body, err := getConfigFromFile()
+					var body []byte
+					if BaseURL == "" {
+						log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
+						body, err := getConfigFromFile()
+						if err != nil {
+							log.Println("Error reading config file", err)
+							return
+						}
+						if len(body) == 0 {
+							log.Println("Config body is still empty. Wait 10ms")
+							// cancelFunc()
+							tkr.Reset(10 * time.Millisecond)
+							return
+						}
+						setConfig(body)
+					}
+
+					body, err = getTokenFromFile()
 					if err != nil {
-						log.Println("Error reading config file", err)
+						log.Println("Error reading token file", err)
 						return
 					}
 					if len(body) == 0 {
-						log.Println("Body is still empty. Wait 10ms")
-						// cancelFunc()
+						log.Println("Token body is still empty. Wait 10ms")
 						tkr.Reset(10 * time.Millisecond)
 						return
 					}
-					setConfig(body)
-
-					getTokenFromFile()
 
 					filec <- struct{}{}
 					tkr.Stop()
@@ -389,7 +401,6 @@ func getTokenFromFile() ([]byte, error) {
 	}
 
 	log.Printf("got token file [%dms]", time.Since(t1).Milliseconds())
-	accessToken = string(body)
 	return body, nil
 }
 
