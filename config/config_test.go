@@ -98,6 +98,10 @@ func TestSeedConfig(t *testing.T) {
 			getVar: func() interface{} { return viper.GetString("auditr_client_secret") },
 			value:  ClientSecret,
 		},
+		"APIKey": {
+			getVar: func() interface{} { return viper.GetString("auditr_api_key") },
+			value:  APIKey,
+		},
 	}
 
 	for name, tc := range tests {

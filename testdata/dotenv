@@ -2,3 +2,4 @@ AUDITR_CONFIG_URL=https://dev-config.auditr.io
 AUDITR_TOKEN_URL=https://dev-auth.auditr.io/oauth2/token
 AUDITR_CLIENT_ID=client-id
 AUDITR_CLIENT_SECRET=client-secret
+AUDITR_API_KEY=api-key

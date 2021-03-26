@@ -44,6 +44,8 @@ var (
 	// ConfigURL is the seed URL to get the rest of the configuration
 	ConfigURL string
 
+	APIKey string
+
 	// TokenURL is the URL to authenticate the agent
 	TokenURL string
 
@@ -96,6 +98,7 @@ func Init(options ...ConfigOption) error {
 	viper.BindEnv("auditr_token_url")
 	viper.BindEnv("auditr_client_id")
 	viper.BindEnv("auditr_client_secret")
+	viper.BindEnv("auditr_api_key")
 
 	viper.SetDefault("auditr_config_url", "https://config.auditr.io")
 	viper.SetDefault("auditr_token_url", "https://auth.auditr.io/oauth2/token")
@@ -114,6 +117,7 @@ func Init(options ...ConfigOption) error {
 	TokenURL = viper.GetString("auditr_token_url")
 	ClientID = viper.GetString("auditr_client_id")
 	ClientSecret = viper.GetString("auditr_client_secret")
+	APIKey = viper.GetString("auditr_api_key")
 
 	ensureSeedConfig()
 	ctx := context.Background()
@@ -121,12 +125,12 @@ func Init(options ...ConfigOption) error {
 	// filec = make(chan struct{})
 	// configureFromFile(ctx)
 
-	auth = &clientcredentials.Config{
-		ClientID:     ClientID,
-		ClientSecret: ClientSecret,
-		Scopes:       []string{"/events/write"},
-		TokenURL:     TokenURL,
-	}
+	// auth = &clientcredentials.Config{
+	// 	ClientID:     ClientID,
+	// 	ClientSecret: ClientSecret,
+	// 	Scopes:       []string{"/events/write"},
+	// 	TokenURL:     TokenURL,
+	// }
 
 	// var wg sync.WaitGroup
 	// wg.Add(1)
@@ -140,13 +144,13 @@ func Init(options ...ConfigOption) error {
 	// 	}
 	// }()
 
-	if clientOverriden {
-		configure(ctx)
-	} else {
-		filec = make(chan struct{})
-		configureFromFile(ctx)
-		<-filec
-	}
+	// if clientOverriden {
+	configure(ctx)
+	// } else {
+	// 	filec = make(chan struct{})
+	// 	configureFromFile(ctx)
+	// 	<-filec
+	// }
 	// <-filec
 	// err := configure(ctx)
 
@@ -170,7 +174,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	req2 := cloneRequest(req)
-	req2.Header.Set("Authorization", "Bearer "+accessToken)
+	req2.Header.Set("Authorization", APIKey)
 
 	reqBodyClosed = true
 	return t.Base.RoundTrip(req2)
@@ -219,11 +223,15 @@ func ensureSeedConfig() {
 	}
 
 	if ClientID == "" {
-		log.Fatal("ClientID must be set using AUDITR_CLIENT_ID")
+		log.Fatal("AUDITR_CLIENT_ID must be set")
 	}
 
 	if ClientSecret == "" {
-		log.Fatal("ClientSecret must be set using AUDITR_CLIENT_SECRET")
+		log.Fatal("AUDITR_CLIENT_SECRET must be set")
+	}
+
+	if APIKey == "" {
+		log.Fatal("AUDITR_API_KEY must be set")
 	}
 }
 
@@ -232,7 +240,18 @@ func configure(ctx context.Context) error {
 	bc := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
 	bo := backoff.WithMaxRetries(bc, maxAttempts)
 	op := func() error {
-		return getConfig(ctx)
+		body, err := getConfig(ctx)
+		if err != nil {
+			return err
+		}
+
+		err = setConfig(body)
+		if err != nil {
+			return err
+		}
+
+		refresh(ctx)
+		return nil
 	}
 
 	t := time.Now()
@@ -248,89 +267,60 @@ func configure(ctx context.Context) error {
 	return nil
 }
 
-func configureFromFile(ctx context.Context) error {
-	t1 := time.Now()
-	log.Println("waiting for config file")
-	tkr := time.NewTicker(100 * time.Millisecond)
-	go func() {
-		for {
-			select {
-			case <-tkr.C:
-				if _, err := os.Stat("/tmp/config"); err == nil {
-					if BaseURL == "" {
-						log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
-						body, err := getConfigFromFile()
-						if err != nil {
-							log.Println("Error reading config file", err)
-						} else {
-							if len(body) == 0 {
-								log.Println("Config body is still empty. Wait 10ms")
-							} else {
-								setConfig(body)
-							}
-						}
-					}
-				}
+// func configureFromFile(ctx context.Context) error {
+// 	t1 := time.Now()
+// 	log.Println("waiting for config file")
+// 	tkr := time.NewTicker(100 * time.Millisecond)
+// 	go func() {
+// 		for {
+// 			select {
+// 			case <-tkr.C:
+// 				if _, err := os.Stat("/tmp/config"); err == nil {
+// 					if BaseURL == "" {
+// 						log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
+// 						body, err := getConfigFromFile()
+// 						if err != nil {
+// 							log.Println("Error reading config file", err)
+// 						} else {
+// 							if len(body) == 0 {
+// 								log.Println("Config body is still empty. Wait 10ms")
+// 							} else {
+// 								setConfig(body)
+// 							}
+// 						}
+// 					}
+// 				}
 
-				if _, err := os.Stat("/tmp/token"); err == nil {
-					if accessToken == "" {
-						body, err := getTokenFromFile()
-						if err != nil {
-							log.Println("Error reading token file", err)
-						} else {
-							if len(body) == 0 {
-								log.Println("Token body is still empty. Wait 10ms")
-							} else {
-								accessToken = string(body)
-							}
-						}
-					}
-				}
+// 				if _, err := os.Stat("/tmp/token"); err == nil {
+// 					if accessToken == "" {
+// 						body, err := getTokenFromFile()
+// 						if err != nil {
+// 							log.Println("Error reading token file", err)
+// 						} else {
+// 							if len(body) == 0 {
+// 								log.Println("Token body is still empty. Wait 10ms")
+// 							} else {
+// 								accessToken = string(body)
+// 							}
+// 						}
+// 					}
+// 				}
 
-				if BaseURL == "" || accessToken == "" {
-					tkr.Reset(10 * time.Millisecond)
-					continue
-				}
+// 				if BaseURL == "" || accessToken == "" {
+// 					tkr.Reset(10 * time.Millisecond)
+// 					continue
+// 				}
 
-				log.Println("Configured")
-				filec <- struct{}{}
-				tkr.Stop()
-				return
-			}
-		}
-	}()
+// 				log.Println("Configured")
+// 				filec <- struct{}{}
+// 				tkr.Stop()
+// 				return
+// 			}
+// 		}
+// 	}()
 
-	return nil
-
-	// watcher, err := fsnotify.NewWatcher()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer watcher.Close()
-
-	// go func() {
-	// 	for {
-	// 		select {
-	// 		case event, ok := <-watcher.Events:
-	// 			if !ok {
-	// 				return
-	// 			}
-	// 			if event.Op&fsnotify.Write == fsnotify.Write ||
-	// 				event.Op&fsnotify.Create == fsnotify.Create {
-	// 				body, _ := getConfigFromFile()
-	// 				setConfig(body)
-	// 			}
-	// 		}
-	// 	}
-	// }()
-
-	// err = watcher.Add("/tmp")
-	// if err != nil {
-	// 	log.Println("Error watching tmp", err)
-	// }
-
-	// return nil
-}
+// 	return nil
+// }
 
 func setConfig(body []byte) error {
 	var c *config
@@ -360,72 +350,72 @@ func setConfig(body []byte) error {
 }
 
 // getConfig acquires configuration from the seed URL
-func getConfig(ctx context.Context) error {
-	body, err := getConfigFromURL(ctx)
+// func getConfig(ctx context.Context) error {
+// 	body, err := getConfigFromURL(ctx)
 
-	var c *config
-	err = json.Unmarshal(body, &c)
-	if err != nil {
-		log.Printf("Error unmarshalling body - Error: %s, Body: %s", err, string(body))
-		return err
-	}
+// 	var c *config
+// 	err = json.Unmarshal(body, &c)
+// 	if err != nil {
+// 		log.Printf("Error unmarshalling body - Error: %s, Body: %s", err, string(body))
+// 		return err
+// 	}
 
-	BaseURL = c.BaseURL
+// 	BaseURL = c.BaseURL
 
-	url, err := url.Parse(c.BaseURL)
-	if err != nil {
-		log.Printf("Error parsing BaseURL: %s", c.BaseURL)
-		return err
-	}
-	url.Path = path.Join(url.Path, c.EventsPath)
-	EventsURL = url.String()
+// 	url, err := url.Parse(c.BaseURL)
+// 	if err != nil {
+// 		log.Printf("Error parsing BaseURL: %s", c.BaseURL)
+// 		return err
+// 	}
+// 	url.Path = path.Join(url.Path, c.EventsPath)
+// 	EventsURL = url.String()
 
-	TargetRoutes = c.TargetRoutes
-	SampleRoutes = c.SampleRoutes
-	if c.CacheDuration > 0 {
-		cacheDuration = time.Duration(c.CacheDuration * int64(time.Second))
-	}
+// 	TargetRoutes = c.TargetRoutes
+// 	SampleRoutes = c.SampleRoutes
+// 	if c.CacheDuration > 0 {
+// 		cacheDuration = time.Duration(c.CacheDuration * int64(time.Second))
+// 	}
 
-	refresh(ctx)
+// 	refresh(ctx)
 
-	return nil
-}
+// 	return nil
+// }
 
-func getTokenFromFile() ([]byte, error) {
-	t1 := time.Now()
-	log.Println("get token file")
-	tok, err := os.Open("/tmp/token")
-	if err != nil {
-		return nil, err
-	}
-	defer tok.Close()
-	body, err := ioutil.ReadAll(tok)
-	if err != nil {
-		return nil, err
-	}
+// func getTokenFromFile() ([]byte, error) {
+// 	t1 := time.Now()
+// 	log.Println("get token file")
+// 	tok, err := os.Open("/tmp/token")
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer tok.Close()
+// 	body, err := ioutil.ReadAll(tok)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	log.Printf("got token file [%dms]", time.Since(t1).Milliseconds())
-	return body, nil
-}
+// 	log.Printf("got token file [%dms]", time.Since(t1).Milliseconds())
+// 	return body, nil
+// }
 
-func getConfigFromFile() ([]byte, error) {
-	t1 := time.Now()
-	log.Println("get config file")
-	cfg, err := os.Open("/tmp/config")
-	if err != nil {
-		return nil, err
-	}
-	defer cfg.Close()
-	body, err := ioutil.ReadAll(cfg)
-	if err != nil {
-		return nil, err
-	}
+// func getConfigFromFile() ([]byte, error) {
+// 	t1 := time.Now()
+// 	log.Println("get config file")
+// 	cfg, err := os.Open("/tmp/config")
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer cfg.Close()
+// 	body, err := ioutil.ReadAll(cfg)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	log.Printf("got config file [%dms]", time.Since(t1).Milliseconds())
-	return body, nil
-}
+// 	log.Printf("got config file [%dms]", time.Since(t1).Milliseconds())
+// 	return body, nil
+// }
 
-func getConfigFromURL(ctx context.Context) ([]byte, error) {
+func getConfig(ctx context.Context) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ConfigURL, nil)
 	if err != nil {
 		log.Printf("Error creating request: %s", err)
