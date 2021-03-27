@@ -19,7 +19,8 @@ const (
 	maxEventBytes int = 25000 // 25kb
 
 	// max bytes allowed per batch
-	maxBatchBytes int = 50 * maxEventBytes // 12.5MB
+	// maxBatchBytes int = 50 * maxEventBytes // 12.5MB
+	maxBatchBytes int = 10 * maxEventBytes // 12.5MB
 
 	// number of batches to hold events exceeding maxBatchBytes
 	// Overflow exceeding this will not be processed.

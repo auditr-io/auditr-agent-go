@@ -28,7 +28,7 @@ const (
 	version string = "0.0.1"
 
 	// DefaultMaxEventsPerBatch is the default max number of events in a batch
-	DefaultMaxEventsPerBatch uint = 50
+	DefaultMaxEventsPerBatch uint = 10
 
 	// DefaultSendInterval is the duration after which to send a pending batch
 	DefaultSendInterval time.Duration = 100 * time.Millisecond
