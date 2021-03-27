@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -60,6 +61,8 @@ var (
 	auth        *clientcredentials.Config
 	authClient  *http.Client
 	accessToken string
+
+	authClientOnce sync.Once
 )
 
 // Acquired configuration
@@ -201,6 +204,23 @@ func DefaultClientProvider(ctx context.Context) *http.Client {
 			},
 		}
 	}
+	authClientOnce.Do(func() {
+		httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
+			Connect:          2 * time.Second,
+			ExpectContinue:   1 * time.Second,
+			IdleConn:         90 * time.Second,
+			ConnKeepAlive:    30 * time.Second,
+			MaxAllIdleConns:  100,
+			MaxHostIdleConns: 10,
+			ResponseHeader:   2 * time.Second,
+			TLSHandshake:     2 * time.Second,
+		})
+		if err != nil {
+			log.Fatalf("Failed to create HTTP client")
+		}
+
+		authClient = httpClient
+	})
 	return authClient
 	// return auth.Client(ctx)
 }
