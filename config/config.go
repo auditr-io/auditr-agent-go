@@ -144,13 +144,13 @@ func Init(options ...ConfigOption) error {
 	// 	}
 	// }()
 
-	// if clientOverriden {
-	configure(ctx)
-	// } else {
-	// 	filec = make(chan struct{})
-	// 	configureFromFile(ctx)
-	// 	<-filec
-	// }
+	if clientOverriden {
+		configure(ctx)
+	} else {
+		filec = make(chan struct{})
+		configureFromFile(ctx)
+		<-filec
+	}
 	// <-filec
 	// err := configure(ctx)
 
@@ -267,60 +267,61 @@ func configure(ctx context.Context) error {
 	return nil
 }
 
-// func configureFromFile(ctx context.Context) error {
-// 	t1 := time.Now()
-// 	log.Println("waiting for config file")
-// 	tkr := time.NewTicker(100 * time.Millisecond)
-// 	go func() {
-// 		for {
-// 			select {
-// 			case <-tkr.C:
-// 				if _, err := os.Stat("/tmp/config"); err == nil {
-// 					if BaseURL == "" {
-// 						log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
-// 						body, err := getConfigFromFile()
-// 						if err != nil {
-// 							log.Println("Error reading config file", err)
-// 						} else {
-// 							if len(body) == 0 {
-// 								log.Println("Config body is still empty. Wait 10ms")
-// 							} else {
-// 								setConfig(body)
-// 							}
-// 						}
-// 					}
-// 				}
+func configureFromFile(ctx context.Context) error {
+	t1 := time.Now()
+	log.Println("waiting for config file")
+	tkr := time.NewTicker(100 * time.Millisecond)
+	go func() {
+		for {
+			select {
+			case <-tkr.C:
+				if _, err := os.Stat("/tmp/config"); err == nil {
+					if BaseURL == "" {
+						log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
+						body, err := getConfigFromFile()
+						if err != nil {
+							log.Println("Error reading config file", err)
+						} else {
+							if len(body) == 0 {
+								log.Println("Config body is still empty. Wait 10ms")
+							} else {
+								setConfig(body)
+							}
+						}
+					}
+				}
 
-// 				if _, err := os.Stat("/tmp/token"); err == nil {
-// 					if accessToken == "" {
-// 						body, err := getTokenFromFile()
-// 						if err != nil {
-// 							log.Println("Error reading token file", err)
-// 						} else {
-// 							if len(body) == 0 {
-// 								log.Println("Token body is still empty. Wait 10ms")
-// 							} else {
-// 								accessToken = string(body)
-// 							}
-// 						}
-// 					}
-// 				}
+				// if _, err := os.Stat("/tmp/token"); err == nil {
+				// 	if accessToken == "" {
+				// 		body, err := getTokenFromFile()
+				// 		if err != nil {
+				// 			log.Println("Error reading token file", err)
+				// 		} else {
+				// 			if len(body) == 0 {
+				// 				log.Println("Token body is still empty. Wait 10ms")
+				// 			} else {
+				// 				accessToken = string(body)
+				// 			}
+				// 		}
+				// 	}
+				// }
 
-// 				if BaseURL == "" || accessToken == "" {
-// 					tkr.Reset(10 * time.Millisecond)
-// 					continue
-// 				}
+				// if BaseURL == "" || accessToken == "" {
+				if BaseURL == "" {
+					tkr.Reset(10 * time.Millisecond)
+					continue
+				}
 
-// 				log.Println("Configured")
-// 				filec <- struct{}{}
-// 				tkr.Stop()
-// 				return
-// 			}
-// 		}
-// 	}()
+				log.Println("Configured")
+				filec <- struct{}{}
+				tkr.Stop()
+				return
+			}
+		}
+	}()
 
-// 	return nil
-// }
+	return nil
+}
 
 func setConfig(body []byte) error {
 	var c *config
@@ -398,22 +399,22 @@ func setConfig(body []byte) error {
 // 	return body, nil
 // }
 
-// func getConfigFromFile() ([]byte, error) {
-// 	t1 := time.Now()
-// 	log.Println("get config file")
-// 	cfg, err := os.Open("/tmp/config")
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer cfg.Close()
-// 	body, err := ioutil.ReadAll(cfg)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+func getConfigFromFile() ([]byte, error) {
+	t1 := time.Now()
+	log.Println("get config file")
+	cfg, err := os.Open("/tmp/config")
+	if err != nil {
+		return nil, err
+	}
+	defer cfg.Close()
+	body, err := ioutil.ReadAll(cfg)
+	if err != nil {
+		return nil, err
+	}
 
-// 	log.Printf("got config file [%dms]", time.Since(t1).Milliseconds())
-// 	return body, nil
-// }
+	log.Printf("got config file [%dms]", time.Since(t1).Milliseconds())
+	return body, nil
+}
 
 func getConfig(ctx context.Context) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ConfigURL, nil)
