@@ -162,48 +162,15 @@ func Init(options ...ConfigOption) error {
 	return nil
 }
 
-type Transport struct {
-	Base http.RoundTripper
-}
-
-func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	reqBodyClosed := false
-	if req.Body != nil {
-		defer func() {
-			if !reqBodyClosed {
-				req.Body.Close()
-			}
-		}()
-	}
-
-	req2 := cloneRequest(req)
-	req2.Header.Set("Authorization", APIKey)
-
-	reqBodyClosed = true
-	return t.Base.RoundTrip(req2)
-}
-
-func cloneRequest(r *http.Request) *http.Request {
-	// shallow copy of the struct
-	r2 := new(http.Request)
-	*r2 = *r
-	// deep copy of the Header
-	r2.Header = make(http.Header, len(r.Header))
-	for k, s := range r.Header {
-		r2.Header[k] = append([]string(nil), s...)
-	}
-	return r2
-}
-
 // DefaultClientProvider returns the default HTTP client with authorization parameters
 func DefaultClientProvider(ctx context.Context) *http.Client {
-	if authClient == nil {
-		authClient = &http.Client{
-			Transport: &Transport{
-				Base: http.DefaultTransport,
-			},
-		}
-	}
+	// if authClient == nil {
+	// 	authClient = &http.Client{
+	// 		Transport: &Transport{
+	// 			Base: http.DefaultTransport,
+	// 		},
+	// 	}
+	// }
 	authClientOnce.Do(func() {
 		httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
 			Connect:          2 * time.Second,

@@ -20,9 +20,41 @@ type HTTPClientSettings struct {
 	TLSHandshake     time.Duration
 }
 
+type Transport struct {
+	Base http.RoundTripper
+}
+
+func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	reqBodyClosed := false
+	if req.Body != nil {
+		defer func() {
+			if !reqBodyClosed {
+				req.Body.Close()
+			}
+		}()
+	}
+
+	req2 := cloneRequest(req)
+	req2.Header.Set("Authorization", APIKey)
+
+	reqBodyClosed = true
+	return t.Base.RoundTrip(req2)
+}
+
+func cloneRequest(r *http.Request) *http.Request {
+	// shallow copy of the struct
+	r2 := new(http.Request)
+	*r2 = *r
+	// deep copy of the Header
+	r2.Header = make(http.Header, len(r.Header))
+	for k, s := range r.Header {
+		r2.Header[k] = append([]string(nil), s...)
+	}
+	return r2
+}
+
 // NewHTTPClientWithSettings creates an HTTP client with some custom settings
 func NewHTTPClientWithSettings(httpSettings HTTPClientSettings) (*http.Client, error) {
-	var client http.Client
 	tr := &http.Transport{
 		ResponseHeaderTimeout: httpSettings.ResponseHeader,
 		Proxy:                 http.ProxyFromEnvironment,
@@ -37,14 +69,17 @@ func NewHTTPClientWithSettings(httpSettings HTTPClientSettings) (*http.Client, e
 		MaxIdleConnsPerHost:   httpSettings.MaxHostIdleConns,
 		ExpectContinueTimeout: httpSettings.ExpectContinue,
 	}
+	client := &http.Client{
+		Transport: &Transport{
+			Base: tr,
+		},
+	}
 
 	// So client makes HTTP/2 requests
 	err := http2.ConfigureTransport(tr)
 	if err != nil {
-		return &client, err
+		return client, err
 	}
 
-	return &http.Client{
-		Transport: tr,
-	}, nil
+	return client, nil
 }
