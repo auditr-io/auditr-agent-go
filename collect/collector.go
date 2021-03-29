@@ -160,6 +160,12 @@ func (c *Collector) capture(
 		panic(err)
 	}
 
+	defer func() {
+		if config.Flush {
+			c.Flush()
+		}
+	}()
+
 	if route != nil {
 		c.publisher.Publish(RouteTypeTarget, route, request, response, errorValue)
 		log.Printf("route: %#v is targeted", route)

@@ -35,6 +35,7 @@ type config struct {
 	TargetRoutes  []Route `json:"target"`
 	SampleRoutes  []Route `json:"sample"`
 	CacheDuration int64   `json:"cache_duration"`
+	Flush         bool    `json:"flush"`
 }
 
 // ConfigOption is an option to override defaults
@@ -59,9 +60,9 @@ var (
 
 	// auth is an OAuth2 Client Credentials client
 	auth        *clientcredentials.Config
-	authClient  *http.Client
 	accessToken string
 
+	authClient     *http.Client
 	authClientOnce sync.Once
 )
 
@@ -71,6 +72,7 @@ var (
 	EventsURL     string
 	TargetRoutes  []Route
 	SampleRoutes  []Route
+	Flush         bool
 	cacheDuration time.Duration = 5 * 60 * time.Second
 	cacheTicker   *time.Ticker
 	cancelFunc    context.CancelFunc
@@ -333,6 +335,8 @@ func setConfig(body []byte) error {
 	if c.CacheDuration > 0 {
 		cacheDuration = time.Duration(c.CacheDuration * int64(time.Second))
 	}
+
+	Flush = c.Flush
 
 	return nil
 }

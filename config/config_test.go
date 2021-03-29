@@ -118,6 +118,7 @@ func TestAcquiredConfig(t *testing.T) {
 		TargetRoutes  []Route `json:"target"`
 		SampleRoutes  []Route `json:"sample"`
 		CacheDuration int64   `json:"cache_duration"`
+		Flush         bool    `json:"flush"`
 	}{
 		BaseURL:    "https://dev-api.auditr.io/v1",
 		EventsPath: "/events",
@@ -140,6 +141,7 @@ func TestAcquiredConfig(t *testing.T) {
 			},
 		},
 		CacheDuration: int64(3 * 60),
+		Flush:         true,
 	}
 
 	configResponse := func() (int, []byte) {
