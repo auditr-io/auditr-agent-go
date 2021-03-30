@@ -322,8 +322,7 @@ func configureFromFile(ctx context.Context) error {
 
 				log.Println("Configured")
 				filec <- struct{}{}
-				tkr.Stop()
-				return
+				tkr.Reset(cacheDuration)
 			}
 		}
 	}()
