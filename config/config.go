@@ -56,6 +56,8 @@ var (
 	ClientSecret    string
 	GetClient       ClientProvider = DefaultClientProvider
 	configClient    ClientProvider = DefaultConfigClientProvider
+	cfgClient       *http.Client
+	cfgClientOnce   sync.Once
 	clientOverriden bool
 
 	// auth is an OAuth2 Client Credentials client
@@ -149,6 +151,7 @@ func Init(options ...ConfigOption) error {
 	// 	}
 	// }()
 
+	clientOverriden = true
 	if clientOverriden {
 		configure(ctx)
 	} else {
@@ -196,7 +199,24 @@ func DefaultClientProvider(ctx context.Context) *http.Client {
 
 // DefaultConfigClientProvider returns the default HTTP client with authorization parameters
 func DefaultConfigClientProvider(ctx context.Context) *http.Client {
-	return http.DefaultClient
+	cfgClientOnce.Do(func() {
+		httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
+			Connect:          2 * time.Second,
+			ExpectContinue:   1 * time.Second,
+			IdleConn:         90 * time.Second,
+			ConnKeepAlive:    30 * time.Second,
+			MaxAllIdleConns:  100,
+			MaxHostIdleConns: 10,
+			ResponseHeader:   2 * time.Second,
+			TLSHandshake:     2 * time.Second,
+		})
+		if err != nil {
+			log.Fatalf("Failed to create HTTP client")
+		}
+
+		cfgClient = httpClient
+	})
+	return cfgClient
 }
 
 // ensureSeedConfig ensures seed config is provided
