@@ -151,7 +151,7 @@ func Init(options ...ConfigOption) error {
 	// 	}
 	// }()
 
-	clientOverriden = true
+	clientOverriden = false
 	if clientOverriden {
 		configure(ctx)
 	} else {
