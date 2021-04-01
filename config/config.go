@@ -281,6 +281,8 @@ func configure(ctx context.Context) error {
 
 func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 	done := make(chan struct{})
+	t1 := time.Now()
+	log.Println("watcher waiting for config file")
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -301,13 +303,12 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 					log.Println("watcher event not ok")
 					continue
 				}
-				log.Println("watcher evt: ", event)
-				if event.Op&fsnotify.Create == fsnotify.Create {
-					log.Printf("watcher file created: name %s, op: %s", event.Name, event.Op)
-				}
-
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					log.Printf("watcher file written: name %s, op: %s", event.Name, event.Op)
+				if event.Op&fsnotify.Create == fsnotify.Create ||
+					event.Op&fsnotify.Write == fsnotify.Write {
+					log.Printf("watcher event: name %s, op: %s", event.Name, event.Op)
+					if event.Name == "/tmp/config" {
+						log.Printf("watcher config file found [%dms]", time.Since(t1).Milliseconds())
+					}
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {

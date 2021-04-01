@@ -184,6 +184,10 @@ func (b *batchList) reenqueue(events []*Event) {
 	}
 }
 
+type httpError interface {
+	Timeout() bool
+}
+
 // send sends a batch of events to the target URL
 func (b *batchList) send(events []*Event) {
 	if len(events) == 0 {
@@ -210,7 +214,15 @@ func (b *batchList) send(events []*Event) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", fmt.Sprintf("auditr-agent-go/%s", version))
 
-	res, err := config.GetClient(ctx).Do(req)
+	var res *http.Response
+	for n := 0; n < 2; n++ {
+		res, err = config.GetClient(ctx).Do(req)
+		if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
+			continue
+		}
+		break
+	}
+
 	if err != nil {
 		b.enqueueResponseForEvents(Response{Err: err}, events)
 		return
