@@ -298,6 +298,7 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 				return
 			case event, ok := <-watcher.Events:
 				if !ok {
+					log.Println("watcher event not ok")
 					continue
 				}
 				log.Println("watcher evt: ", event)
@@ -310,6 +311,7 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
+					log.Println("watcher error not ok")
 					continue
 				}
 				log.Printf("error: %+v", err)
