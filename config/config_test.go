@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io/fs"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -196,4 +198,30 @@ func TestAcquiredConfig(t *testing.T) {
 	// assert.Equal(t, expectedEventsURL.String(), EventsURL)
 	// assert.Equal(t, expected.TargetRoutes, TargetRoutes)
 	// assert.Equal(t, expected.SampleRoutes, SampleRoutes)
+}
+
+func TestWatcher(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dir, err := os.MkdirTemp("/tmp", "cfg*")
+	assert.NoError(t, err)
+
+	done, err := watchFile(ctx, dir)
+	assert.NoError(t, err)
+
+	f1, err := os.CreateTemp(dir, "cfgfile*")
+	assert.NoError(t, err)
+	f1.Sync()
+	defer f1.Close()
+	f1Info, err := f1.Stat()
+	assert.NoError(t, err)
+	assert.Equal(t, f1.Name(), dir+"/"+f1Info.Name())
+
+	err = ioutil.WriteFile(f1.Name(), []byte(`test`), fs.ModeAppend)
+	assert.NoError(t, err)
+
+	cancel()
+
+	<-done
 }

@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2/clientcredentials"
 )
@@ -151,6 +151,10 @@ func Init(options ...ConfigOption) error {
 	// 	}
 	// }()
 
+	if _, err := watchFile(ctx, "/tmp"); err != nil {
+		log.Printf("Error watching file: %+v", err)
+	}
+
 	if clientOverriden {
 		configure(ctx)
 	} else {
@@ -273,6 +277,50 @@ func configure(ctx context.Context) error {
 	log.Printf("configured [%dms]", time.Since(t).Milliseconds())
 
 	return nil
+}
+
+func watchFile(ctx context.Context, dir string) (<-chan struct{}, error) {
+	done := make(chan struct{})
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return done, err
+	}
+
+	go func() {
+		defer watcher.Close()
+
+		for {
+			select {
+			case <-ctx.Done():
+				close(done)
+				return
+			case event, ok := <-watcher.Events:
+				if !ok {
+					continue
+				}
+				log.Println("watcher evt: ", event)
+				if event.Op&fsnotify.Create == fsnotify.Create {
+					log.Printf("watcher file created: name %s, op: %s", event.Name, event.Op)
+				}
+
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					log.Printf("watcher file written: name %s, op: %s", event.Name, event.Op)
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					continue
+				}
+				log.Printf("error: %+v", err)
+			}
+		}
+	}()
+
+	if err := watcher.Add(dir); err != nil {
+		return done, err
+	}
+
+	return done, nil
 }
 
 func configureFromFile(ctx context.Context) error {
@@ -432,8 +480,6 @@ func getConfig(ctx context.Context) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	sec := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", ClientID, ClientSecret)))
-	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", sec))
 
 	t1 := time.Now()
 	log.Println("get config url")
