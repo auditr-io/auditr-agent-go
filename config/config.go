@@ -279,7 +279,7 @@ func configure(ctx context.Context) error {
 	return nil
 }
 
-func watchFile(ctx context.Context, dir string) (<-chan struct{}, error) {
+func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 	done := make(chan struct{})
 
 	watcher, err := fsnotify.NewWatcher()
@@ -293,6 +293,7 @@ func watchFile(ctx context.Context, dir string) (<-chan struct{}, error) {
 		for {
 			select {
 			case <-ctx.Done():
+				log.Println("watcher done")
 				close(done)
 				return
 			case event, ok := <-watcher.Events:
@@ -316,7 +317,7 @@ func watchFile(ctx context.Context, dir string) (<-chan struct{}, error) {
 		}
 	}()
 
-	if err := watcher.Add(dir); err != nil {
+	if err := watcher.Add(path); err != nil {
 		return done, err
 	}
 
