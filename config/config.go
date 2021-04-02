@@ -30,12 +30,18 @@ type Route struct {
 
 // config is used to unmarshal acquired configuration
 type config struct {
-	BaseURL       string  `json:"base_url"`
-	EventsPath    string  `json:"events_path"`
-	TargetRoutes  []Route `json:"target"`
-	SampleRoutes  []Route `json:"sample"`
-	CacheDuration int64   `json:"cache_duration"`
-	Flush         bool    `json:"flush"`
+	BaseURL              string  `json:"base_url"`
+	EventsPath           string  `json:"events_path"`
+	TargetRoutes         []Route `json:"target"`
+	SampleRoutes         []Route `json:"sample"`
+	CacheDuration        uint    `json:"cache_duration"`
+	Flush                bool    `json:"flush"`
+	MaxEventsPerBatch    uint    `json:"max_events_per_batch"`
+	MaxConcurrentBatches uint    `json:"max_concurrent_batches"`
+	PendingWorkCapacity  uint    `json:"pending_work_capacity"`
+	SendInterval         uint    `json:"send_interval"`
+	BlockOnSend          bool    `json:"block_on_send"`
+	BlockOnResponse      bool    `json:"block_on_response"`
 }
 
 // ConfigOption is an option to override defaults
@@ -66,6 +72,10 @@ var (
 
 	authClient     *http.Client
 	authClientOnce sync.Once
+
+	cacheTicker *time.Ticker
+	cancelFunc  context.CancelFunc
+	filec       chan struct{}
 )
 
 // Acquired configuration
@@ -76,9 +86,13 @@ var (
 	SampleRoutes  []Route
 	Flush         bool
 	cacheDuration time.Duration = 5 * 60 * time.Second
-	cacheTicker   *time.Ticker
-	cancelFunc    context.CancelFunc
-	filec         chan struct{}
+
+	MaxEventsPerBatch    uint
+	MaxConcurrentBatches uint
+	PendingWorkCapacity  uint
+	SendInterval         time.Duration
+	BlockOnSend          bool
+	BlockOnResponse      bool
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -403,10 +417,17 @@ func setConfig(body []byte) error {
 	TargetRoutes = c.TargetRoutes
 	SampleRoutes = c.SampleRoutes
 	if c.CacheDuration > 0 {
-		cacheDuration = time.Duration(c.CacheDuration * int64(time.Second))
+		cacheDuration = time.Duration(c.CacheDuration * uint(time.Second))
 	}
 
 	Flush = c.Flush
+
+	MaxEventsPerBatch = c.MaxEventsPerBatch
+	MaxConcurrentBatches = c.MaxConcurrentBatches
+	PendingWorkCapacity = c.PendingWorkCapacity
+	SendInterval = time.Duration(c.SendInterval * uint(time.Millisecond))
+	BlockOnSend = c.BlockOnSend
+	BlockOnResponse = c.BlockOnResponse
 
 	return nil
 }

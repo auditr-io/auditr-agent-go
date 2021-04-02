@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/auditr-io/auditr-agent-go/collect"
+	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/auditr-io/auditr-agent-go/lambda/events"
 	"github.com/auditr-io/lambdahooks-go"
 )
@@ -18,14 +19,21 @@ type Agent struct {
 	hooksInit sync.Once
 }
 
-func NewAgentWithOptions(options *collect.CollectorOptions) (*Agent, error) {
+func NewAgentWithDynamicOptions() (*Agent, error) {
 	a := &Agent{}
 
 	c, err := collect.NewCollectorWithOptions(
 		[]collect.EventBuilder{
 			&APIGatewayEventBuilder{},
 		},
-		options,
+		&collect.CollectorOptions{
+			MaxEventsPerBatch:    config.MaxEventsPerBatch,
+			MaxConcurrentBatches: config.MaxConcurrentBatches,
+			PendingWorkCapacity:  config.PendingWorkCapacity,
+			SendInterval:         config.SendInterval,
+			BlockOnSend:          config.BlockOnSend,
+			BlockOnResponse:      config.BlockOnResponse,
+		},
 	)
 	if err != nil {
 		return nil, err
