@@ -103,7 +103,9 @@ func NewEventPublisher(
 // WithMaxEventsPerBatch sets the max events per batch
 func WithMaxEventsPerBatch(events uint) PublisherOption {
 	return func(p *EventPublisher) error {
-		p.maxEventsPerBatch = events
+		if events > 0 {
+			p.maxEventsPerBatch = events
+		}
 		return nil
 	}
 }
@@ -111,7 +113,9 @@ func WithMaxEventsPerBatch(events uint) PublisherOption {
 // WithSendInterval sets the interval at which a batch is sent
 func WithSendInterval(interval time.Duration) PublisherOption {
 	return func(p *EventPublisher) error {
-		p.sendInterval = interval
+		if interval > 0 {
+			p.sendInterval = interval
+		}
 		return nil
 	}
 }
@@ -119,7 +123,9 @@ func WithSendInterval(interval time.Duration) PublisherOption {
 // WithMaxConcurrentBatches sets the max concurrent batches
 func WithMaxConcurrentBatches(batches uint) PublisherOption {
 	return func(p *EventPublisher) error {
-		p.maxConcurrentBatches = batches
+		if batches > 0 {
+			p.maxConcurrentBatches = batches
+		}
 		return nil
 	}
 }
@@ -128,7 +134,9 @@ func WithMaxConcurrentBatches(batches uint) PublisherOption {
 // This sets the number of pending events to hold in the queue before blocking.
 func WithPendingWorkCapacity(capacity uint) PublisherOption {
 	return func(p *EventPublisher) error {
-		p.pendingWorkCapacity = capacity
+		if capacity > 0 {
+			p.pendingWorkCapacity = capacity
+		}
 		return nil
 	}
 }

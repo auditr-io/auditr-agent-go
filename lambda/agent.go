@@ -18,6 +18,24 @@ type Agent struct {
 	hooksInit sync.Once
 }
 
+func NewAgentWithOptions(options *collect.CollectorOptions) (*Agent, error) {
+	a := &Agent{}
+
+	c, err := collect.NewCollectorWithOptions(
+		[]collect.EventBuilder{
+			&APIGatewayEventBuilder{},
+		},
+		options,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	a.collector = c
+
+	return a, nil
+}
+
 // NewAgent creates a new agent instance
 func NewAgent(options ...collect.CollectorOption) (*Agent, error) {
 	a := &Agent{}

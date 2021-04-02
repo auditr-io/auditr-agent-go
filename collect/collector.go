@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/auditr-io/auditr-agent-go/config"
 )
@@ -16,26 +17,70 @@ type Collector struct {
 	publisher     Publisher
 
 	setupReadyc chan struct{}
-	// pendingc    chan pendingEvent
 }
-
-// type pendingEvent struct {
-// 	ctx        context.Context
-// 	httpMethod string
-// 	path       string
-// 	resource   string
-// 	request    interface{}
-// 	response   json.RawMessage
-// 	errorValue json.RawMessage
-// }
-
-// const maxPendingEvents = 50 // 50 events in a sec
 
 // CollectorOption is an option to override defaults
 type CollectorOption func(*Collector) error
 
 // ClientProvider is a function that returns an HTTP client
 type ClientProvider func(context.Context) *http.Client
+
+type CollectorOptions struct {
+	HTTPClient           *http.Client
+	MaxEventsPerBatch    uint
+	SendInterval         time.Duration
+	MaxConcurrentBatches uint
+	PendingWorkCapacity  uint
+	BlockOnSend          bool
+	BlockOnResponse      bool
+}
+
+func NewCollectorWithOptions(
+	builders []EventBuilder,
+	options *CollectorOptions,
+) (*Collector, error) {
+	c := &Collector{
+		configOptions: []config.ConfigOption{},
+		setupReadyc:   make(chan struct{}, 1),
+	}
+
+	go func() {
+		config.Init(
+			// todo: replace w options obj
+			config.WithHTTPClient(
+				config.ClientProvider(
+					func(context.Context) *http.Client {
+						return options.HTTPClient
+					},
+				),
+			),
+		)
+
+		c.router = NewRouter(
+			config.TargetRoutes,
+			config.SampleRoutes,
+		)
+
+		close(c.setupReadyc)
+	}()
+
+	p, err := NewEventPublisher(
+		builders,
+		WithMaxEventsPerBatch(options.MaxEventsPerBatch),
+		WithMaxConcurrentBatches(options.MaxConcurrentBatches),
+		WithSendInterval(options.SendInterval),
+		WithPendingWorkCapacity(options.PendingWorkCapacity),
+		WithBlockOnSend(options.BlockOnSend),
+		WithBlockOnResponse(options.BlockOnResponse),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	c.publisher = p
+
+	return c, nil
+}
 
 // NewCollector creates a new collector instance
 func NewCollector(
@@ -97,63 +142,6 @@ func (c *Collector) Collect(
 	response json.RawMessage,
 	errorValue json.RawMessage,
 ) {
-	c.capture(
-		ctx,
-		httpMethod,
-		path,
-		resource,
-		request,
-		response,
-		errorValue,
-	)
-	// select {
-	// case <-c.setupReadyc:
-	// 	c.capture(
-	// 		ctx,
-	// 		httpMethod,
-	// 		path,
-	// 		resource,
-	// 		request,
-	// 		response,
-	// 		errorValue,
-	// 	)
-	// default:
-	// 	// stash in chan
-	// 	c.pendingc <- pendingEvent{
-	// 		ctx,
-	// 		httpMethod,
-	// 		path,
-	// 		resource,
-	// 		request,
-	// 		response,
-	// 		errorValue,
-	// 	}
-	// }
-}
-
-// func (c *Collector) drainPending() {
-// 	for e := range c.pendingc {
-// 		c.capture(
-// 			e.ctx,
-// 			e.httpMethod,
-// 			e.path,
-// 			e.resource,
-// 			e.request,
-// 			e.response,
-// 			e.errorValue,
-// 		)
-// 	}
-// }
-
-func (c *Collector) capture(
-	ctx context.Context,
-	httpMethod string,
-	path string,
-	resource string,
-	request interface{},
-	response json.RawMessage,
-	errorValue json.RawMessage,
-) {
 	<-c.setupReadyc
 	route, err := c.router.FindRoute(RouteTypeTarget, httpMethod, path)
 	if err != nil {
@@ -200,6 +188,7 @@ func (c *Collector) capture(
 	}
 }
 
+// SetupReady returns a channel indicating whether setup is complete
 func (c *Collector) SetupReady() <-chan struct{} {
 	return c.setupReadyc
 }
