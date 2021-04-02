@@ -38,6 +38,7 @@ type CollectorOptions struct {
 func NewCollectorWithOptions(
 	builders []EventBuilder,
 	options *CollectorOptions,
+	configOptions ...config.ConfigOption,
 ) (*Collector, error) {
 	c := &Collector{
 		configOptions: []config.ConfigOption{},
@@ -45,16 +46,7 @@ func NewCollectorWithOptions(
 	}
 
 	go func() {
-		config.Init(
-			// todo: replace w options obj
-			config.WithHTTPClient(
-				config.ClientProvider(
-					func(context.Context) *http.Client {
-						return options.HTTPClient
-					},
-				),
-			),
-		)
+		config.Init(configOptions...)
 
 		c.router = NewRouter(
 			config.TargetRoutes,

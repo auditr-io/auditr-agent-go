@@ -19,7 +19,7 @@ type Agent struct {
 	hooksInit sync.Once
 }
 
-func NewAgentWithDynamicOptions() (*Agent, error) {
+func NewAgentWithDynamicOptions(configOptions ...config.ConfigOption) (*Agent, error) {
 	a := &Agent{}
 
 	c, err := collect.NewCollectorWithOptions(
@@ -34,6 +34,7 @@ func NewAgentWithDynamicOptions() (*Agent, error) {
 			BlockOnSend:          config.BlockOnSend,
 			BlockOnResponse:      config.BlockOnResponse,
 		},
+		configOptions...,
 	)
 	if err != nil {
 		return nil, err
