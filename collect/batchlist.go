@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 
 	"github.com/auditr-io/auditr-agent-go/config"
@@ -200,7 +201,6 @@ func (b *batchList) send(events []*Event) {
 		// nothing encoded
 		return
 	}
-
 	eventsReader := ioutil.NopCloser(bytes.NewReader(eventsJSON))
 
 	ctx := context.Background()
@@ -215,6 +215,7 @@ func (b *batchList) send(events []*Event) {
 	req.Header.Set("User-Agent", fmt.Sprintf("auditr-agent-go/%s", version))
 
 	var res *http.Response
+	// retry once in case of timeouts
 	for n := 0; n < 2; n++ {
 		res, err = config.GetClient(ctx).Do(req)
 		if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
@@ -233,6 +234,10 @@ func (b *batchList) send(events []*Event) {
 		errRes := Response{
 			Err:        fmt.Errorf("Error sending %s %s: status %d", method, config.EventsURL, res.StatusCode),
 			StatusCode: res.StatusCode,
+		}
+
+		if res.StatusCode == http.StatusBadRequest {
+			log.Printf("eventsJSON: %s", string(eventsJSON))
 		}
 
 		body, err := ioutil.ReadAll(res.Body)
