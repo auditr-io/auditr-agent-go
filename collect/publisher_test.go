@@ -229,7 +229,10 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		errRes,
 	).Return(expectedEvent, nil).Once()
 
-	p, err := NewEventPublisher([]EventBuilder{b})
+	p, err := NewEventPublisher(
+		[]EventBuilder{b},
+		&PublisherOptions{},
+	)
 	assert.NoError(t, err)
 
 	var wg sync.WaitGroup
@@ -436,7 +439,10 @@ func TestFlush_PublishesEvent(t *testing.T) {
 		errRes,
 	).Return(expectedEvent, nil).Once()
 
-	p, err := NewEventPublisher([]EventBuilder{b})
+	p, err := NewEventPublisher(
+		[]EventBuilder{b},
+		&PublisherOptions{},
+	)
 	assert.NoError(t, err)
 
 	p.Publish(

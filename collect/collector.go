@@ -17,21 +17,9 @@ type Collector struct {
 	setupReadyc chan struct{}
 }
 
-// CollectorOptions are options to override default settings
-// type CollectorOptions struct {
-// 	HTTPClient           *http.Client // do we need this?
-// 	MaxEventsPerBatch    uint
-// 	SendInterval         time.Duration
-// 	MaxConcurrentBatches uint
-// 	PendingWorkCapacity  uint
-// 	BlockOnSend          bool
-// 	BlockOnResponse      bool
-// }
-
 // NewCollector creates a new collector instance
 func NewCollector(
 	builders []EventBuilder,
-	// options *CollectorOptions,
 	options *PublisherOptions,
 	configOptions ...config.ConfigOption,
 ) (*Collector, error) {
@@ -51,16 +39,7 @@ func NewCollector(
 		close(c.setupReadyc)
 	}()
 
-	// p, err := NewEventPublisher(
-	// 	builders,
-	// 	WithMaxEventsPerBatch(options.MaxEventsPerBatch),
-	// 	WithMaxConcurrentBatches(options.MaxConcurrentBatches),
-	// 	WithSendInterval(options.SendInterval),
-	// 	WithPendingWorkCapacity(options.PendingWorkCapacity),
-	// 	WithBlockOnSend(options.BlockOnSend),
-	// 	WithBlockOnResponse(options.BlockOnResponse),
-	// )
-	p, err := NewEventPublisherWithOptions(
+	p, err := NewEventPublisher(
 		builders,
 		options,
 	)

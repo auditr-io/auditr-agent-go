@@ -75,7 +75,7 @@ type PublisherOptions struct {
 // A list of event builders is required to map the parameters
 // to an Event. The event builders are evaluated in order and
 // stops at the first builder that successfully maps to an Event.
-func NewEventPublisherWithOptions(
+func NewEventPublisher(
 	eventBuilders []EventBuilder,
 	options *PublisherOptions,
 ) (*EventPublisher, error) {
@@ -125,114 +125,6 @@ func NewEventPublisherWithOptions(
 	}
 
 	return p, nil
-}
-
-// NewEventPublisher creates a new EventPublisher.
-// A list of event builders is required to map the parameters
-// to an Event. The event builders are evaluated in order and
-// stops at the first builder that successfully maps to an Event.
-func NewEventPublisher(
-	eventBuilders []EventBuilder,
-	options ...PublisherOption,
-) (*EventPublisher, error) {
-	p := &EventPublisher{
-		eventBuilders:        eventBuilders,
-		maxEventsPerBatch:    DefaultMaxEventsPerBatch,
-		sendInterval:         DefaultSendInterval,
-		maxConcurrentBatches: DefaultMaxConcurrentBatches,
-		pendingWorkCapacity:  DefaultPendingWorkCapacity,
-	}
-
-	for _, opt := range options {
-		if err := opt(p); err != nil {
-			return nil, err
-		}
-	}
-
-	p.responses = make(chan Response, p.pendingWorkCapacity*2)
-
-	p.batchMaker = func() muster.Batch {
-		b := newBatchList(
-			p.responses,
-			p.maxEventsPerBatch,
-			p.maxConcurrentBatches,
-		)
-		// TODO: withBlockOnResponse()
-		b.blockOnResponse = p.blockOnResponse
-		return b
-	}
-	p.muster = p.createMuster()
-	err := p.muster.Start()
-	if err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-// WithMaxEventsPerBatch sets the max events per batch
-func WithMaxEventsPerBatch(events uint) PublisherOption {
-	return func(p *EventPublisher) error {
-		if events > 0 {
-			p.maxEventsPerBatch = events
-		}
-		return nil
-	}
-}
-
-// WithSendInterval sets the interval at which a batch is sent
-func WithSendInterval(interval time.Duration) PublisherOption {
-	return func(p *EventPublisher) error {
-		if interval > 0 {
-			p.sendInterval = interval
-		}
-		return nil
-	}
-}
-
-// WithMaxConcurrentBatches sets the max concurrent batches
-func WithMaxConcurrentBatches(batches uint) PublisherOption {
-	return func(p *EventPublisher) error {
-		if batches > 0 {
-			p.maxConcurrentBatches = batches
-		}
-		return nil
-	}
-}
-
-// WithPendingWorkCapacity sets the pending work capacity.
-// This sets the number of pending events to hold in the queue before blocking.
-func WithPendingWorkCapacity(capacity uint) PublisherOption {
-	return func(p *EventPublisher) error {
-		if capacity > 0 {
-			p.pendingWorkCapacity = capacity
-		}
-		return nil
-	}
-}
-
-// WithBlockOnResponse blocks on returning a response to the caller.
-// When set to true, be sure to read the responses. Otherwise, if the
-// channel fills up, this will block sending the events altogether.
-// Defaults to false. Unread responses are simply dropped so processing
-// continues uninterrupted.
-func WithBlockOnResponse(block bool) PublisherOption {
-	return func(p *EventPublisher) error {
-		p.blockOnResponse = block
-		return nil
-	}
-}
-
-// WithBlockOnSend blocks when sending an event if the batch is full.
-// When set to true, this will block sending the events altogether once
-// the batch fills up to pendingWorkCapacity.
-// Defaults to false. Overflowing events are simply dropped so processing
-// continues uninterrupted.
-func WithBlockOnSend(block bool) PublisherOption {
-	return func(p *EventPublisher) error {
-		p.blockOnSend = block
-		return nil
-	}
 }
 
 // createMuster creates the muster client that coordinates the batch processing
