@@ -44,6 +44,7 @@ const (
 // This batch handling implementation is shamelessly borrowed from
 // Honeycomb's libhoney.
 type EventPublisher struct {
+	eventBuilders        []EventBuilder
 	maxEventsPerBatch    uint
 	sendInterval         time.Duration
 	maxConcurrentBatches uint
@@ -51,15 +52,80 @@ type EventPublisher struct {
 	blockOnSend          bool
 	blockOnResponse      bool
 
-	eventBuilders []EventBuilder
-	batchMaker    func() muster.Batch
-	muster        *muster.Client
-	musterLock    sync.RWMutex
-	responses     chan Response
+	batchMaker func() muster.Batch
+	muster     *muster.Client
+	musterLock sync.RWMutex
+	responses  chan Response
 }
 
 // PublisherOption is an option to override defaults
 type PublisherOption func(p *EventPublisher) error
+
+// PublisherOptions are options to override default settings
+type PublisherOptions struct {
+	MaxEventsPerBatch    uint
+	SendInterval         time.Duration
+	MaxConcurrentBatches uint
+	PendingWorkCapacity  uint
+	BlockOnSend          bool
+	BlockOnResponse      bool
+}
+
+// NewEventPublisher creates a new EventPublisher.
+// A list of event builders is required to map the parameters
+// to an Event. The event builders are evaluated in order and
+// stops at the first builder that successfully maps to an Event.
+func NewEventPublisherWithOptions(
+	eventBuilders []EventBuilder,
+	options *PublisherOptions,
+) (*EventPublisher, error) {
+	p := &EventPublisher{
+		eventBuilders:        eventBuilders,
+		maxEventsPerBatch:    DefaultMaxEventsPerBatch,
+		sendInterval:         DefaultSendInterval,
+		maxConcurrentBatches: DefaultMaxConcurrentBatches,
+		pendingWorkCapacity:  DefaultPendingWorkCapacity,
+	}
+
+	if options.MaxEventsPerBatch > 0 {
+		p.maxEventsPerBatch = options.MaxEventsPerBatch
+	}
+
+	if options.SendInterval > 0 {
+		p.sendInterval = options.SendInterval
+	}
+
+	if options.MaxConcurrentBatches > 0 {
+		p.maxConcurrentBatches = options.MaxConcurrentBatches
+	}
+
+	if options.PendingWorkCapacity > 0 {
+		p.pendingWorkCapacity = options.PendingWorkCapacity
+	}
+
+	p.blockOnSend = options.BlockOnSend
+	p.blockOnResponse = options.BlockOnResponse
+
+	p.responses = make(chan Response, p.pendingWorkCapacity*2)
+
+	p.batchMaker = func() muster.Batch {
+		b := newBatchList(
+			p.responses,
+			p.maxEventsPerBatch,
+			p.maxConcurrentBatches,
+		)
+		// TODO: withBlockOnResponse()
+		b.blockOnResponse = p.blockOnResponse
+		return b
+	}
+	p.muster = p.createMuster()
+	err := p.muster.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
 
 // NewEventPublisher creates a new EventPublisher.
 // A list of event builders is required to map the parameters
@@ -86,7 +152,11 @@ func NewEventPublisher(
 	p.responses = make(chan Response, p.pendingWorkCapacity*2)
 
 	p.batchMaker = func() muster.Batch {
-		b := newBatchList(p.responses, p.maxConcurrentBatches)
+		b := newBatchList(
+			p.responses,
+			p.maxEventsPerBatch,
+			p.maxConcurrentBatches,
+		)
 		// TODO: withBlockOnResponse()
 		b.blockOnResponse = p.blockOnResponse
 		return b

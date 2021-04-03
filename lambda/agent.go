@@ -26,7 +26,7 @@ func NewAgent(configOptions ...config.ConfigOption) (*Agent, error) {
 		[]collect.EventBuilder{
 			&APIGatewayEventBuilder{},
 		},
-		&collect.CollectorOptions{
+		&collect.PublisherOptions{
 			MaxEventsPerBatch:    config.MaxEventsPerBatch,
 			MaxConcurrentBatches: config.MaxConcurrentBatches,
 			PendingWorkCapacity:  config.PendingWorkCapacity,

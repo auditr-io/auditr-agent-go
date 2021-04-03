@@ -19,10 +19,6 @@ const (
 	// max bytes allowed per event
 	maxEventBytes int = 25000 // 25kb
 
-	// max bytes allowed per batch
-	// maxBatchBytes int = 50 * maxEventBytes // 12.5MB
-	maxBatchBytes int = 10 * maxEventBytes // 12.5MB
-
 	// number of batches to hold events exceeding maxBatchBytes
 	// Overflow exceeding this will not be processed.
 	maxOverflowBatches int = 10
@@ -57,7 +53,11 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 // This batch handling implementation is shamelessly borrowed from
 // Honeycomb's libhoney.
 type batchList struct {
+	maxEventsPerBatch    uint
 	maxConcurrentBatches uint
+
+	// max bytes allowed per batch
+	maxBatchBytes int
 
 	// batches of events
 	batches map[int][]*Event
@@ -70,12 +70,18 @@ type batchList struct {
 }
 
 // newBatchList creates a new batch list
-func newBatchList(responses chan Response, maxConcurrentBatches uint) *batchList {
+func newBatchList(
+	responses chan Response,
+	maxEventsPerBatch uint,
+	maxConcurrentBatches uint,
+) *batchList {
 	b := &batchList{
 		batches:              map[int][]*Event{},
 		overflowBatches:      map[int][]*Event{},
 		responses:            responses,
+		maxEventsPerBatch:    maxEventsPerBatch,
 		maxConcurrentBatches: maxConcurrentBatches,
+		maxBatchBytes:        int(maxEventsPerBatch) * maxEventBytes,
 	}
 
 	return b
@@ -315,7 +321,7 @@ func (b *batchList) encodeJSON(events []*Event) ([]byte, int) {
 			continue
 		}
 
-		if buf.Len()+len(payload)+1 > maxBatchBytes {
+		if buf.Len()+len(payload)+1 > b.maxBatchBytes {
 			b.reenqueue(events[i:])
 			break
 		}
