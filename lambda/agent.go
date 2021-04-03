@@ -19,10 +19,10 @@ type Agent struct {
 	hooksInit sync.Once
 }
 
-func NewAgentWithDynamicOptions(configOptions ...config.ConfigOption) (*Agent, error) {
+func NewAgent(configOptions ...config.ConfigOption) (*Agent, error) {
 	a := &Agent{}
 
-	c, err := collect.NewCollectorWithOptions(
+	c, err := collect.NewCollector(
 		[]collect.EventBuilder{
 			&APIGatewayEventBuilder{},
 		},
@@ -35,25 +35,6 @@ func NewAgentWithDynamicOptions(configOptions ...config.ConfigOption) (*Agent, e
 			BlockOnResponse:      config.BlockOnResponse,
 		},
 		configOptions...,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	a.collector = c
-
-	return a, nil
-}
-
-// NewAgent creates a new agent instance
-func NewAgent(options ...collect.CollectorOption) (*Agent, error) {
-	a := &Agent{}
-
-	c, err := collect.NewCollector(
-		[]collect.EventBuilder{
-			&APIGatewayEventBuilder{},
-		},
-		options...,
 	)
 	if err != nil {
 		return nil, err

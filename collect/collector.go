@@ -19,12 +19,7 @@ type Collector struct {
 	setupReadyc chan struct{}
 }
 
-// CollectorOption is an option to override defaults
-type CollectorOption func(*Collector) error
-
-// ClientProvider is a function that returns an HTTP client
-type ClientProvider func(context.Context) *http.Client
-
+// CollectorOptions are options to override default settings
 type CollectorOptions struct {
 	HTTPClient           *http.Client
 	MaxEventsPerBatch    uint
@@ -35,7 +30,8 @@ type CollectorOptions struct {
 	BlockOnResponse      bool
 }
 
-func NewCollectorWithOptions(
+// NewCollector creates a new collector instance
+func NewCollector(
 	builders []EventBuilder,
 	options *CollectorOptions,
 	configOptions ...config.ConfigOption,
@@ -72,56 +68,6 @@ func NewCollectorWithOptions(
 	c.publisher = p
 
 	return c, nil
-}
-
-// NewCollector creates a new collector instance
-func NewCollector(
-	builders []EventBuilder,
-	options ...CollectorOption,
-) (*Collector, error) {
-	c := &Collector{
-		configOptions: []config.ConfigOption{},
-		setupReadyc:   make(chan struct{}, 1),
-		// pendingc:      make(chan pendingEvent, maxPendingEvents),
-	}
-
-	for _, opt := range options {
-		if err := opt(c); err != nil {
-			return nil, err
-		}
-	}
-
-	go func() {
-		config.Init(c.configOptions...)
-
-		c.router = NewRouter(
-			config.TargetRoutes,
-			config.SampleRoutes,
-		)
-
-		// go c.drainPending()
-		close(c.setupReadyc)
-	}()
-
-	p, err := NewEventPublisher(builders)
-	if err != nil {
-		return nil, err
-	}
-
-	c.publisher = p
-
-	return c, nil
-}
-
-// WithHTTPClient overrides the default HTTP client with given client
-func WithHTTPClient(client ClientProvider) CollectorOption {
-	return func(c *Collector) error {
-		c.configOptions = append(
-			c.configOptions,
-			config.WithHTTPClient(config.ClientProvider(client)),
-		)
-		return nil
-	}
 }
 
 // Collect captures the request as an audit event or a sample

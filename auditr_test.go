@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/auditr-io/auditr-agent-go/lambda"
 	"github.com/auditr-io/auditr-agent-go/lambda/events"
@@ -125,7 +124,7 @@ func TestAudit(t *testing.T) {
 	}
 
 	agentInstance, _ = lambda.NewAgent(
-		collect.WithHTTPClient(mockClient),
+		config.WithHTTPClient(mockClient),
 	)
 	wrappedHandler := Audit(handler).(Handler)
 	reqBytes, _ := json.Marshal(req)

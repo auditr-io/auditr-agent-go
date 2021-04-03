@@ -86,7 +86,7 @@ func TestNewAgent_ReturnsAgent(t *testing.T) {
 	}
 
 	a, err := NewAgent(
-		collect.WithHTTPClient(mockClient),
+		config.WithHTTPClient(mockClient),
 	)
 	assert.NoError(t, err)
 	assert.NotNil(t, a)
@@ -195,7 +195,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 	}
 
 	a, err := NewAgent(
-		collect.WithHTTPClient(mockClient),
+		config.WithHTTPClient(mockClient),
 	)
 	assert.NoError(t, err)
 
@@ -298,7 +298,7 @@ func TestAfterExecution_SkipsSampleAPIGatewayEvent(t *testing.T) {
 	}
 
 	a, err := NewAgent(
-		collect.WithHTTPClient(mockClient),
+		config.WithHTTPClient(mockClient),
 	)
 	assert.NoError(t, err)
 
@@ -412,7 +412,7 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 	}
 
 	a, err := NewAgent(
-		collect.WithHTTPClient(mockClient),
+		config.WithHTTPClient(mockClient),
 	)
 	assert.NoError(t, err)
 
@@ -539,7 +539,7 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 	}
 
 	a, err := NewAgent(
-		collect.WithHTTPClient(mockClient),
+		config.WithHTTPClient(mockClient),
 	)
 	assert.NoError(t, err)
 
