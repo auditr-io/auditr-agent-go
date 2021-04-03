@@ -16,7 +16,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
-	"golang.org/x/oauth2/clientcredentials"
 )
 
 // ClientProvider is a function that returns an HTTP client
@@ -52,23 +51,14 @@ var (
 	// ConfigURL is the seed URL to get the rest of the configuration
 	ConfigURL string
 
+	// APIKey is the API key to use with API calls
 	APIKey string
 
-	// TokenURL is the URL to authenticate the agent
-	TokenURL string
-
-	// Client credentials
-	ClientID        string
-	ClientSecret    string
 	GetClient       ClientProvider = DefaultClientProvider
 	configClient    ClientProvider = DefaultConfigClientProvider
 	cfgClient       *http.Client
 	cfgClientOnce   sync.Once
 	clientOverriden bool
-
-	// auth is an OAuth2 Client Credentials client
-	auth        *clientcredentials.Config
-	accessToken string
 
 	authClient     *http.Client
 	authClientOnce sync.Once
@@ -135,35 +125,11 @@ func Init(options ...ConfigOption) error {
 	}
 
 	ConfigURL = viper.GetString("auditr_config_url")
-	TokenURL = viper.GetString("auditr_token_url")
-	ClientID = viper.GetString("auditr_client_id")
-	ClientSecret = viper.GetString("auditr_client_secret")
 	APIKey = viper.GetString("auditr_api_key")
 
 	ensureSeedConfig()
 	ctx := context.Background()
 	ctx, cancelFunc = context.WithCancel(ctx)
-	// filec = make(chan struct{})
-	// configureFromFile(ctx)
-
-	// auth = &clientcredentials.Config{
-	// 	ClientID:     ClientID,
-	// 	ClientSecret: ClientSecret,
-	// 	Scopes:       []string{"/events/write"},
-	// 	TokenURL:     TokenURL,
-	// }
-
-	// var wg sync.WaitGroup
-	// wg.Add(1)
-	// go func() {
-	// 	defer wg.Done()
-
-	// 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://auditr.io", nil)
-	// 	res, err := GetClient(ctx).Do(req)
-	// 	if err == nil {
-	// 		defer res.Body.Close()
-	// 	}
-	// }()
 
 	if _, err := watchFile(ctx, "/tmp"); err != nil {
 		log.Printf("Error watching file: %+v", err)
@@ -176,23 +142,11 @@ func Init(options ...ConfigOption) error {
 		configureFromFile(ctx)
 		<-filec
 	}
-	// <-filec
-	// err := configure(ctx)
-
-	// return err
-	// wg.Wait()
 	return nil
 }
 
 // DefaultClientProvider returns the default HTTP client with authorization parameters
 func DefaultClientProvider(ctx context.Context) *http.Client {
-	// if authClient == nil {
-	// 	authClient = &http.Client{
-	// 		Transport: &Transport{
-	// 			Base: http.DefaultTransport,
-	// 		},
-	// 	}
-	// }
 	authClientOnce.Do(func() {
 		httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
 			Connect:          2 * time.Second,
@@ -211,7 +165,6 @@ func DefaultClientProvider(ctx context.Context) *http.Client {
 		authClient = httpClient
 	})
 	return authClient
-	// return auth.Client(ctx)
 }
 
 // DefaultConfigClientProvider returns the default HTTP client with authorization parameters
@@ -241,19 +194,6 @@ func ensureSeedConfig() {
 	if ConfigURL == "" {
 		// Should never happen due to default
 		log.Fatal("ConfigURL must be set")
-	}
-
-	if TokenURL == "" {
-		// Should never happen due to default
-		log.Fatal("TokenURL must be set")
-	}
-
-	if ClientID == "" {
-		log.Fatal("AUDITR_CLIENT_ID must be set")
-	}
-
-	if ClientSecret == "" {
-		log.Fatal("AUDITR_CLIENT_SECRET must be set")
 	}
 
 	if APIKey == "" {
@@ -365,22 +305,6 @@ func configureFromFile(ctx context.Context) error {
 					}
 				}
 
-				// if _, err := os.Stat("/tmp/token"); err == nil {
-				// 	if accessToken == "" {
-				// 		body, err := getTokenFromFile()
-				// 		if err != nil {
-				// 			log.Println("Error reading token file", err)
-				// 		} else {
-				// 			if len(body) == 0 {
-				// 				log.Println("Token body is still empty. Wait 10ms")
-				// 			} else {
-				// 				accessToken = string(body)
-				// 			}
-				// 		}
-				// 	}
-				// }
-
-				// if BaseURL == "" || accessToken == "" {
 				if BaseURL == "" {
 					tkr.Reset(10 * time.Millisecond)
 					continue
@@ -462,23 +386,6 @@ func setConfig(body []byte) error {
 // 	refresh(ctx)
 
 // 	return nil
-// }
-
-// func getTokenFromFile() ([]byte, error) {
-// 	t1 := time.Now()
-// 	log.Println("get token file")
-// 	tok, err := os.Open("/tmp/token")
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer tok.Close()
-// 	body, err := ioutil.ReadAll(tok)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	log.Printf("got token file [%dms]", time.Since(t1).Milliseconds())
-// 	return body, nil
 // }
 
 func getConfigFromFile() ([]byte, error) {
