@@ -201,11 +201,11 @@ func (b *batchList) send(events []*Event) {
 		// nothing encoded
 		return
 	}
-	eventsReader := ioutil.NopCloser(bytes.NewReader(eventsJSON))
+	// eventsReader := ioutil.NopCloser(bytes.NewReader(eventsJSON))
 
 	ctx := context.Background()
 	method := http.MethodPost
-	req, err := http.NewRequestWithContext(ctx, method, config.EventsURL, eventsReader)
+	req, err := http.NewRequestWithContext(ctx, method, config.EventsURL, bytes.NewReader(eventsJSON))
 	if err != nil {
 		b.enqueueResponseForEvents(Response{Err: err}, events)
 		return
