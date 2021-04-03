@@ -201,22 +201,31 @@ func (b *batchList) send(events []*Event) {
 		// nothing encoded
 		return
 	}
-	// eventsReader := ioutil.NopCloser(bytes.NewReader(eventsJSON))
 
 	ctx := context.Background()
 	method := http.MethodPost
-	req, err := http.NewRequestWithContext(ctx, method, config.EventsURL, bytes.NewReader(eventsJSON))
-	if err != nil {
-		b.enqueueResponseForEvents(Response{Err: err}, events)
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", fmt.Sprintf("auditr-agent-go/%s", version))
-
+	var req *http.Request
 	var res *http.Response
+	var err error
+
 	// retry once in case of timeouts
 	for n := 0; n < 2; n++ {
+		eventsReader := ioutil.NopCloser(bytes.NewReader(eventsJSON))
+
+		req, err = http.NewRequestWithContext(
+			ctx,
+			method,
+			config.EventsURL,
+			eventsReader,
+		)
+		if err != nil {
+			b.enqueueResponseForEvents(Response{Err: err}, events)
+			return
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", fmt.Sprintf("auditr-agent-go/%s", version))
+
 		res, err = config.GetClient(ctx).Do(req)
 		if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
 			continue
@@ -232,18 +241,17 @@ func (b *batchList) send(events []*Event) {
 
 	if res.StatusCode != http.StatusOK {
 		errRes := Response{
-			Err:        fmt.Errorf("Error sending %s %s: status %d", method, config.EventsURL, res.StatusCode),
+			Err: fmt.Errorf(
+				"Error sending %s %s: status %d",
+				method,
+				config.EventsURL,
+				res.StatusCode,
+			),
 			StatusCode: res.StatusCode,
 		}
 
 		if res.StatusCode == http.StatusBadRequest {
 			log.Printf("eventsJSON: %s", string(eventsJSON))
-			var b []byte
-			_, err := req.Body.Read(b)
-			if err != nil {
-				log.Printf("error reading req.Body: %+v", err)
-			}
-			log.Printf("req.Body: %s", string(b))
 		}
 
 		body, err := ioutil.ReadAll(res.Body)
