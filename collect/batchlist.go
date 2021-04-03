@@ -238,6 +238,12 @@ func (b *batchList) send(events []*Event) {
 
 		if res.StatusCode == http.StatusBadRequest {
 			log.Printf("eventsJSON: %s", string(eventsJSON))
+			var b []byte
+			_, err := req.Body.Read(b)
+			if err != nil {
+				log.Printf("error reading req.Body: %+v", err)
+			}
+			log.Printf("req.Body: %s", string(b))
 		}
 
 		body, err := ioutil.ReadAll(res.Body)
