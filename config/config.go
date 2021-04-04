@@ -149,7 +149,7 @@ func Init(options ...ConfigOption) error {
 func DefaultClientProvider(ctx context.Context) *http.Client {
 	client, err := NewHTTPClient(EventsURL)
 	if err != nil {
-		log.Fatalln("Failed to create events HTTP client")
+		log.Fatalf("Failed to create events HTTP client: %#v", err)
 	}
 
 	return client
@@ -178,7 +178,7 @@ func DefaultClientProvider(ctx context.Context) *http.Client {
 func DefaultConfigClientProvider(ctx context.Context) *http.Client {
 	client, err := NewHTTPClient(ConfigURL)
 	if err != nil {
-		log.Fatalln("Failed to create config HTTP client")
+		log.Fatalf("Failed to create config HTTP client %#v", err)
 	}
 
 	return client
