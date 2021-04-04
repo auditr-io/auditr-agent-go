@@ -229,29 +229,36 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 					log.Println("watcher event not ok")
 					continue
 				}
-				if event.Op&fsnotify.Create == fsnotify.Create ||
-					event.Op&fsnotify.Write == fsnotify.Write {
-					log.Printf("watcher event: name %s, op: %s", event.Name, event.Op)
-					if event.Name == "/tmp/config" {
-						log.Printf("watcher config file found [%dms]", time.Since(t1).Milliseconds())
-						t1 = time.Now()
 
-						body, err := getConfigFromFile()
-						if err != nil {
-							log.Println("Error reading config file", err)
-						} else {
-							if len(body) == 0 {
-								log.Println("Config body is empty")
-							} else {
-								if err := setConfig(body); err != nil {
-									log.Printf("watcher error setting config %+v", err)
-								} else {
-									filec <- struct{}{}
-								}
-							}
-						}
-					}
+				if event.Op&fsnotify.Write != fsnotify.Write {
+					continue
 				}
+
+				log.Printf("watcher event: name %s, op: %s", event.Name, event.Op)
+				if event.Name != "/tmp/config" {
+					continue
+				}
+
+				log.Printf("watcher config file found [%dms]", time.Since(t1).Milliseconds())
+				t1 = time.Now()
+
+				body, err := getConfigFromFile()
+				if err != nil {
+					log.Println("Error reading config file", err)
+					continue
+				}
+
+				if len(body) == 0 {
+					log.Println("Config body is empty")
+					continue
+				}
+
+				if err := setConfig(body); err != nil {
+					log.Printf("watcher error setting config %+v", err)
+					continue
+				}
+
+				filec <- struct{}{}
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					log.Println("watcher error not ok")
