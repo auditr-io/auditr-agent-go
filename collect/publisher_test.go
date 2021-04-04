@@ -2,7 +2,6 @@ package collect
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -188,7 +187,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		// .Twice()
 
 	config.Init(
-		config.WithHTTPClient(func(ctx context.Context) *http.Client {
+		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
 				Transport: m,
 			}
@@ -398,7 +397,7 @@ func TestFlush_PublishesEvent(t *testing.T) {
 		// .Twice()
 
 	config.Init(
-		config.WithHTTPClient(func(ctx context.Context) *http.Client {
+		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
 				Transport: m,
 			}

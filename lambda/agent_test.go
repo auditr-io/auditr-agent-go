@@ -79,7 +79,7 @@ func TestNewAgent_ReturnsAgent(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil)
 
-	mockClient := func(ctx context.Context) *http.Client {
+	mockClient := func() *http.Client {
 		return &http.Client{
 			Transport: m,
 		}
@@ -188,7 +188,7 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil)
 
-	mockClient := func(ctx context.Context) *http.Client {
+	mockClient := func() *http.Client {
 		return &http.Client{
 			Transport: m,
 		}
@@ -291,7 +291,7 @@ func TestAfterExecution_SkipsSampleAPIGatewayEvent(t *testing.T) {
 		Return(mock.AnythingOfType("*http.Response"), nil)
 		// .Once()
 
-	mockClient := func(ctx context.Context) *http.Client {
+	mockClient := func() *http.Client {
 		return &http.Client{
 			Transport: m,
 		}
@@ -405,7 +405,7 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil)
 
-	mockClient := func(ctx context.Context) *http.Client {
+	mockClient := func() *http.Client {
 		return &http.Client{
 			Transport: m,
 		}
@@ -532,7 +532,7 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil)
 
-	mockClient := func(ctx context.Context) *http.Client {
+	mockClient := func() *http.Client {
 		return &http.Client{
 			Transport: m,
 		}

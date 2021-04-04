@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -19,7 +18,7 @@ import (
 )
 
 // ClientProvider is a function that returns an HTTP client
-type ClientProvider func(context.Context) *http.Client
+type ClientProvider func() *http.Client
 
 // Route is a route used for targeting or sampling
 type Route struct {
@@ -54,14 +53,9 @@ var (
 	// APIKey is the API key to use with API calls
 	APIKey string
 
-	GetClient       ClientProvider = DefaultClientProvider
-	configClient    ClientProvider = DefaultConfigClientProvider
-	cfgClient       *http.Client
-	cfgClientOnce   sync.Once
+	GetEventsClient ClientProvider = DefaultEventsClientProvider
+	getConfigClient ClientProvider = DefaultConfigClientProvider
 	clientOverriden bool
-
-	authClient     *http.Client
-	authClientOnce sync.Once
 
 	cacheTicker *time.Ticker
 	cancelFunc  context.CancelFunc
@@ -88,8 +82,8 @@ var (
 // WithHTTPClient overrides the default HTTP client with given client
 func WithHTTPClient(client ClientProvider) ConfigOption {
 	return func(args ...interface{}) error {
-		GetClient = client
-		configClient = client
+		GetEventsClient = client
+		getConfigClient = client
 		clientOverriden = true
 		return nil
 	}
@@ -145,62 +139,24 @@ func Init(options ...ConfigOption) error {
 	return nil
 }
 
-// DefaultClientProvider returns the default HTTP client with authorization parameters
-func DefaultClientProvider(ctx context.Context) *http.Client {
+// DefaultEventsClientProvider returns the default HTTP client with authorization parameters
+func DefaultEventsClientProvider() *http.Client {
 	client, err := NewHTTPClient(EventsURL)
 	if err != nil {
 		log.Fatalf("Failed to create events HTTP client: %#v", err)
 	}
 
 	return client
-
-	// authClientOnce.Do(func() {
-	// 	httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
-	// 		Connect:          2 * time.Second,
-	// 		ExpectContinue:   1 * time.Second,
-	// 		IdleConn:         90 * time.Second,
-	// 		ConnKeepAlive:    30 * time.Second,
-	// 		MaxAllIdleConns:  100,
-	// 		MaxHostIdleConns: 10,
-	// 		ResponseHeader:   2 * time.Second,
-	// 		TLSHandshake:     2 * time.Second,
-	// 	})
-	// 	if err != nil {
-	// 		log.Fatalf("Failed to create HTTP client")
-	// 	}
-
-	// 	authClient = httpClient
-	// })
-	// return authClient
 }
 
 // DefaultConfigClientProvider returns the default HTTP client with authorization parameters
-func DefaultConfigClientProvider(ctx context.Context) *http.Client {
+func DefaultConfigClientProvider() *http.Client {
 	client, err := NewHTTPClient(ConfigURL)
 	if err != nil {
 		log.Fatalf("Failed to create config HTTP client %#v", err)
 	}
 
 	return client
-
-	// cfgClientOnce.Do(func() {
-	// 	httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
-	// 		Connect:          2 * time.Second,
-	// 		ExpectContinue:   1 * time.Second,
-	// 		IdleConn:         90 * time.Second,
-	// 		ConnKeepAlive:    30 * time.Second,
-	// 		MaxAllIdleConns:  100,
-	// 		MaxHostIdleConns: 10,
-	// 		ResponseHeader:   2 * time.Second,
-	// 		TLSHandshake:     2 * time.Second,
-	// 	})
-	// 	if err != nil {
-	// 		log.Fatalf("Failed to create HTTP client")
-	// 	}
-
-	// 	cfgClient = httpClient
-	// })
-	// return cfgClient
 }
 
 // ensureSeedConfig ensures seed config is provided
@@ -429,7 +385,7 @@ func getConfig(ctx context.Context) ([]byte, error) {
 
 	t1 := time.Now()
 	log.Println("get config url")
-	res, err := configClient(ctx).Do(req)
+	res, err := getConfigClient().Do(req)
 	log.Printf("got config url [%dms]", time.Since(t1).Milliseconds())
 	if err != nil {
 		log.Printf("Error getting config: %s", err)

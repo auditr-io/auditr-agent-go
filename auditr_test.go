@@ -117,7 +117,7 @@ func TestAudit(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil)
 
-	mockClient := func(ctx context.Context) *http.Client {
+	mockClient := func() *http.Client {
 		return &http.Client{
 			Transport: m,
 		}

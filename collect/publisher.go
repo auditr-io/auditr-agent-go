@@ -33,11 +33,17 @@ const (
 	// DefaultSendInterval is the duration after which to send a pending batch
 	DefaultSendInterval time.Duration = 100 * time.Millisecond
 
-	// DefaultMaxConcurrentBatches is how many parallel batches before we start blocking
+	// DefaultMaxConcurrentBatches is how many parallel batches before
+	// we start blocking
 	DefaultMaxConcurrentBatches uint = 10
 
-	// DefaultPendingWorkCapacity is pending items to hold in the work channel before blocking
-	DefaultPendingWorkCapacity uint = DefaultMaxEventsPerBatch * 2
+	// DefaultPendingWorkCapacity is pending items to hold in the work channel
+	// before blocking or overflowing
+	DefaultPendingWorkCapacity uint = DefaultMaxEventsPerBatch * PendingWorkToMaxEventsRatio
+
+	// PendingWorkToMaxEventsRatio is a safeguard to hold enough pending work
+	// to minimize overflowing
+	PendingWorkToMaxEventsRatio uint = 2
 )
 
 // EventPublisher publishes audit events to auditr.
@@ -89,7 +95,7 @@ func NewEventPublisher(
 
 	if options.MaxEventsPerBatch > 0 {
 		p.maxEventsPerBatch = options.MaxEventsPerBatch
-		p.pendingWorkCapacity = options.MaxEventsPerBatch * 2
+		p.pendingWorkCapacity = options.MaxEventsPerBatch * PendingWorkToMaxEventsRatio
 	}
 
 	if options.SendInterval > 0 {

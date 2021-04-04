@@ -2,7 +2,6 @@ package collect
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -136,7 +135,7 @@ func TestBatchListFire(t *testing.T) {
 		// .Twice()
 
 	config.Init(
-		config.WithHTTPClient(func(ctx context.Context) *http.Client {
+		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
 				Transport: m,
 			}
@@ -233,7 +232,7 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 		// .Times(3)
 
 	config.Init(
-		config.WithHTTPClient(func(ctx context.Context) *http.Client {
+		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
 				Transport: m,
 			}
@@ -338,7 +337,7 @@ func TestSend(t *testing.T) {
 		// .Twice()
 
 	config.Init(
-		config.WithHTTPClient(func(ctx context.Context) *http.Client {
+		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
 				Transport: m,
 			}
@@ -429,7 +428,7 @@ func TestSend_GetResponseOnError(t *testing.T) {
 		// .Twice()
 
 	config.Init(
-		config.WithHTTPClient(func(ctx context.Context) *http.Client {
+		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
 				Transport: m,
 			}
@@ -548,7 +547,7 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 		// .Twice()
 
 	config.Init(
-		config.WithHTTPClient(func(ctx context.Context) *http.Client {
+		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
 				Transport: m,
 			}

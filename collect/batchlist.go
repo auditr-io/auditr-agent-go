@@ -84,7 +84,7 @@ func newBatchList(
 		maxEventsPerBatch:    maxEventsPerBatch,
 		maxConcurrentBatches: maxConcurrentBatches,
 		maxBatchBytes:        int(maxEventsPerBatch) * maxEventBytes,
-		client:               config.GetClient(context.Background()),
+		client:               config.GetEventsClient(),
 	}
 
 	return b
@@ -263,6 +263,7 @@ func (b *batchList) send(events []*Event) {
 			log.Printf("eventsJSON: %s", string(eventsJSON))
 		}
 
+		// todo: retry on 5xx
 		body, err := ioutil.ReadAll(res.Body)
 		if err != nil {
 			errRes.Err = err
