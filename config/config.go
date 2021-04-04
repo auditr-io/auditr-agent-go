@@ -125,17 +125,19 @@ func Init(options ...ConfigOption) error {
 	ctx := context.Background()
 	ctx, cancelFunc = context.WithCancel(ctx)
 
+	filec = make(chan struct{})
 	if _, err := watchFile(ctx, "/tmp"); err != nil {
 		log.Printf("Error watching file: %+v", err)
 	}
 
 	if clientOverriden {
 		configure(ctx)
-		// } else {
+	} else {
 		// 	filec = make(chan struct{})
 		// 	configureFromFile(ctx)
-		// 	<-filec
+		<-filec
 	}
+
 	return nil
 }
 
@@ -241,7 +243,9 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 							if len(body) == 0 {
 								log.Println("Config body is empty")
 							} else {
-								setConfig(body)
+								if err := setConfig(body); err != nil {
+									filec <- struct{}{}
+								}
 							}
 						}
 					}
