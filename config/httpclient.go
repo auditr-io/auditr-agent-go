@@ -8,6 +8,21 @@ import (
 	"golang.org/x/net/http2"
 )
 
+var (
+	transports map[string]*http.Transport
+
+	DefaultHTTPClientSettings = HTTPClientSettings{
+		Connect:          2 * time.Second,
+		ExpectContinue:   1 * time.Second,
+		IdleConn:         90 * time.Second,
+		ConnKeepAlive:    30 * time.Second,
+		MaxAllIdleConns:  100,
+		MaxHostIdleConns: 10,
+		ResponseHeader:   2 * time.Second,
+		TLSHandshake:     2 * time.Second,
+	}
+)
+
 // HTTPClientSettings defines the HTTP setting for clients
 type HTTPClientSettings struct {
 	Connect          time.Duration
@@ -53,22 +68,35 @@ func cloneRequest(r *http.Request) *http.Request {
 	return r2
 }
 
+// NewHTTPClient returns an HTTP client with reasonable default settings
+// The client also attempts to re-use the same transport
+func NewHTTPClient(url string) (*http.Client, error) {
+	return NewHTTPClientWithSettings(url, DefaultHTTPClientSettings)
+}
+
 // NewHTTPClientWithSettings creates an HTTP client with some custom settings
-func NewHTTPClientWithSettings(httpSettings HTTPClientSettings) (*http.Client, error) {
-	tr := &http.Transport{
-		ResponseHeaderTimeout: httpSettings.ResponseHeader,
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			KeepAlive: httpSettings.ConnKeepAlive,
-			DualStack: true,
-			Timeout:   httpSettings.Connect,
-		}).DialContext,
-		MaxIdleConns:          httpSettings.MaxAllIdleConns,
-		IdleConnTimeout:       httpSettings.IdleConn,
-		TLSHandshakeTimeout:   httpSettings.TLSHandshake,
-		MaxIdleConnsPerHost:   httpSettings.MaxHostIdleConns,
-		ExpectContinueTimeout: httpSettings.ExpectContinue,
+func NewHTTPClientWithSettings(
+	url string,
+	settings HTTPClientSettings,
+) (*http.Client, error) {
+	tr, ok := transports[url]
+	if !ok {
+		tr = &http.Transport{
+			ResponseHeaderTimeout: settings.ResponseHeader,
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				KeepAlive: settings.ConnKeepAlive,
+				Timeout:   settings.Connect,
+			}).DialContext,
+			MaxIdleConns:          settings.MaxAllIdleConns,
+			IdleConnTimeout:       settings.IdleConn,
+			TLSHandshakeTimeout:   settings.TLSHandshake,
+			MaxIdleConnsPerHost:   settings.MaxHostIdleConns,
+			ExpectContinueTimeout: settings.ExpectContinue,
+		}
+		transports[url] = tr
 	}
+
 	client := &http.Client{
 		Transport: &Transport{
 			Base: tr,

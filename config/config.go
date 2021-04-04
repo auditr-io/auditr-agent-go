@@ -147,46 +147,60 @@ func Init(options ...ConfigOption) error {
 
 // DefaultClientProvider returns the default HTTP client with authorization parameters
 func DefaultClientProvider(ctx context.Context) *http.Client {
-	authClientOnce.Do(func() {
-		httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
-			Connect:          2 * time.Second,
-			ExpectContinue:   1 * time.Second,
-			IdleConn:         90 * time.Second,
-			ConnKeepAlive:    30 * time.Second,
-			MaxAllIdleConns:  100,
-			MaxHostIdleConns: 10,
-			ResponseHeader:   2 * time.Second,
-			TLSHandshake:     2 * time.Second,
-		})
-		if err != nil {
-			log.Fatalf("Failed to create HTTP client")
-		}
+	client, err := NewHTTPClient(EventsURL)
+	if err != nil {
+		log.Fatalln("Failed to create events HTTP client")
+	}
 
-		authClient = httpClient
-	})
-	return authClient
+	return client
+
+	// authClientOnce.Do(func() {
+	// 	httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
+	// 		Connect:          2 * time.Second,
+	// 		ExpectContinue:   1 * time.Second,
+	// 		IdleConn:         90 * time.Second,
+	// 		ConnKeepAlive:    30 * time.Second,
+	// 		MaxAllIdleConns:  100,
+	// 		MaxHostIdleConns: 10,
+	// 		ResponseHeader:   2 * time.Second,
+	// 		TLSHandshake:     2 * time.Second,
+	// 	})
+	// 	if err != nil {
+	// 		log.Fatalf("Failed to create HTTP client")
+	// 	}
+
+	// 	authClient = httpClient
+	// })
+	// return authClient
 }
 
 // DefaultConfigClientProvider returns the default HTTP client with authorization parameters
 func DefaultConfigClientProvider(ctx context.Context) *http.Client {
-	cfgClientOnce.Do(func() {
-		httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
-			Connect:          2 * time.Second,
-			ExpectContinue:   1 * time.Second,
-			IdleConn:         90 * time.Second,
-			ConnKeepAlive:    30 * time.Second,
-			MaxAllIdleConns:  100,
-			MaxHostIdleConns: 10,
-			ResponseHeader:   2 * time.Second,
-			TLSHandshake:     2 * time.Second,
-		})
-		if err != nil {
-			log.Fatalf("Failed to create HTTP client")
-		}
+	client, err := NewHTTPClient(ConfigURL)
+	if err != nil {
+		log.Fatalln("Failed to create config HTTP client")
+	}
 
-		cfgClient = httpClient
-	})
-	return cfgClient
+	return client
+
+	// cfgClientOnce.Do(func() {
+	// 	httpClient, err := NewHTTPClientWithSettings(HTTPClientSettings{
+	// 		Connect:          2 * time.Second,
+	// 		ExpectContinue:   1 * time.Second,
+	// 		IdleConn:         90 * time.Second,
+	// 		ConnKeepAlive:    30 * time.Second,
+	// 		MaxAllIdleConns:  100,
+	// 		MaxHostIdleConns: 10,
+	// 		ResponseHeader:   2 * time.Second,
+	// 		TLSHandshake:     2 * time.Second,
+	// 	})
+	// 	if err != nil {
+	// 		log.Fatalf("Failed to create HTTP client")
+	// 	}
+
+	// 	cfgClient = httpClient
+	// })
+	// return cfgClient
 }
 
 // ensureSeedConfig ensures seed config is provided
