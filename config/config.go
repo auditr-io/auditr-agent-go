@@ -131,10 +131,10 @@ func Init(options ...ConfigOption) error {
 
 	if clientOverriden {
 		configure(ctx)
-	} else {
-		filec = make(chan struct{})
-		configureFromFile(ctx)
-		<-filec
+		// } else {
+		// 	filec = make(chan struct{})
+		// 	configureFromFile(ctx)
+		// 	<-filec
 	}
 	return nil
 }
@@ -232,6 +232,18 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 					log.Printf("watcher event: name %s, op: %s", event.Name, event.Op)
 					if event.Name == "/tmp/config" {
 						log.Printf("watcher config file found [%dms]", time.Since(t1).Milliseconds())
+						t1 = time.Now()
+
+						body, err := getConfigFromFile()
+						if err != nil {
+							log.Println("Error reading config file", err)
+						} else {
+							if len(body) == 0 {
+								log.Println("Config body is empty")
+							} else {
+								setConfig(body)
+							}
+						}
 					}
 				}
 			case err, ok := <-watcher.Errors:
@@ -251,44 +263,44 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 	return done, nil
 }
 
-func configureFromFile(ctx context.Context) error {
-	t1 := time.Now()
-	log.Println("waiting for config file")
-	tkr := time.NewTicker(100 * time.Millisecond)
-	go func() {
-		for {
-			select {
-			case <-tkr.C:
-				if _, err := os.Stat("/tmp/config"); err == nil {
-					if BaseURL == "" {
-						log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
-						body, err := getConfigFromFile()
-						if err != nil {
-							log.Println("Error reading config file", err)
-						} else {
-							if len(body) == 0 {
-								log.Println("Config body is still empty. Wait 10ms")
-							} else {
-								setConfig(body)
-							}
-						}
-					}
-				}
+// func configureFromFile(ctx context.Context) error {
+// 	t1 := time.Now()
+// 	log.Println("waiting for config file")
+// 	tkr := time.NewTicker(100 * time.Millisecond)
+// 	go func() {
+// 		for {
+// 			select {
+// 			case <-tkr.C:
+// 				if _, err := os.Stat("/tmp/config"); err == nil {
+// 					if BaseURL == "" {
+// 						log.Printf("config file found [%dms]", time.Since(t1).Milliseconds())
+// 						body, err := getConfigFromFile()
+// 						if err != nil {
+// 							log.Println("Error reading config file", err)
+// 						} else {
+// 							if len(body) == 0 {
+// 								log.Println("Config body is still empty. Wait 10ms")
+// 							} else {
+// 								setConfig(body)
+// 							}
+// 						}
+// 					}
+// 				}
 
-				if BaseURL == "" {
-					tkr.Reset(10 * time.Millisecond)
-					continue
-				}
+// 				if BaseURL == "" {
+// 					tkr.Reset(10 * time.Millisecond)
+// 					continue
+// 				}
 
-				log.Println("Configured")
-				filec <- struct{}{}
-				tkr.Reset(cacheDuration)
-			}
-		}
-	}()
+// 				log.Println("Configured")
+// 				filec <- struct{}{}
+// 				tkr.Reset(cacheDuration)
+// 			}
+// 		}
+// 	}()
 
-	return nil
-}
+// 	return nil
+// }
 
 func setConfig(body []byte) error {
 	var c *config
