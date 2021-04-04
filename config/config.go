@@ -244,6 +244,8 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 								log.Println("Config body is empty")
 							} else {
 								if err := setConfig(body); err != nil {
+									log.Printf("watcher error setting config %+v", err)
+								} else {
 									filec <- struct{}{}
 								}
 							}
