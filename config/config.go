@@ -148,7 +148,7 @@ func Init(options ...ConfigOption) error {
 // DefaultClientProvider returns the default HTTP client with authorization parameters
 func DefaultClientProvider(ctx context.Context) *http.Client {
 	client, err := NewHTTPClient(EventsURL)
-	if err != nil && err.Error() != "protocol https already registered" {
+	if err != nil {
 		log.Fatalf("Failed to create events HTTP client: %#v", err)
 	}
 
@@ -177,7 +177,7 @@ func DefaultClientProvider(ctx context.Context) *http.Client {
 // DefaultConfigClientProvider returns the default HTTP client with authorization parameters
 func DefaultConfigClientProvider(ctx context.Context) *http.Client {
 	client, err := NewHTTPClient(ConfigURL)
-	if err != nil && err.Error() != "protocol https already registered" {
+	if err != nil {
 		log.Fatalf("Failed to create config HTTP client %#v", err)
 	}
 

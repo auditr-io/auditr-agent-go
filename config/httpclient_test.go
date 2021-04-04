@@ -18,9 +18,7 @@ func TestNewHTTPClient_ReusesTransport(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			client, err := NewHTTPClient("https://auditr.io")
-			if err != nil {
-				assert.Equal(t, "protocol https already registered", err.Error())
-			}
+			assert.NoError(t, err)
 			clients = append(clients, client)
 		}()
 	}

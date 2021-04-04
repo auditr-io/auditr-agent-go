@@ -3,6 +3,7 @@ package config
 import (
 	"net"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
 
@@ -19,7 +20,7 @@ var (
 		IdleConn:         90 * time.Second,
 		ConnKeepAlive:    30 * time.Second,
 		MaxAllIdleConns:  100,
-		MaxHostIdleConns: 10,
+		MaxHostIdleConns: runtime.GOMAXPROCS(0) + 1,
 		ResponseHeader:   2 * time.Second,
 		TLSHandshake:     2 * time.Second,
 	}
@@ -83,6 +84,8 @@ func NewHTTPClientWithSettings(
 ) (*http.Client, error) {
 	transportsSync.Lock()
 	defer transportsSync.Unlock()
+
+	var err error
 	tr, ok := transports[url]
 	if !ok {
 		tr = &http.Transport{
@@ -97,7 +100,12 @@ func NewHTTPClientWithSettings(
 			TLSHandshakeTimeout:   settings.TLSHandshake,
 			MaxIdleConnsPerHost:   settings.MaxHostIdleConns,
 			ExpectContinueTimeout: settings.ExpectContinue,
+			ForceAttemptHTTP2:     true,
 		}
+
+		// So client makes HTTP/2 requests
+		err = http2.ConfigureTransport(tr)
+
 		transports[url] = tr
 	}
 
@@ -107,11 +115,5 @@ func NewHTTPClientWithSettings(
 		},
 	}
 
-	// So client makes HTTP/2 requests
-	err := http2.ConfigureTransport(tr)
-	if err != nil {
-		return client, err
-	}
-
-	return client, nil
+	return client, err
 }
