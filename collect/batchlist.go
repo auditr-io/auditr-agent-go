@@ -236,9 +236,12 @@ func (b *batchList) send(events []*Event) {
 		req.Header.Set("User-Agent", fmt.Sprintf("auditr-agent-go/%s", version))
 
 		res, err = b.client.Do(req)
-		if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
+		if err != nil {
 			continue
 		}
+		// if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
+		// 	continue
+		// }
 		break
 	}
 
