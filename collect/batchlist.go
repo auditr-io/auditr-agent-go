@@ -67,6 +67,8 @@ type batchList struct {
 
 	responses       chan Response
 	blockOnResponse bool
+
+	client *http.Client
 }
 
 // newBatchList creates a new batch list
@@ -82,6 +84,7 @@ func newBatchList(
 		maxEventsPerBatch:    maxEventsPerBatch,
 		maxConcurrentBatches: maxConcurrentBatches,
 		maxBatchBytes:        int(maxEventsPerBatch) * maxEventBytes,
+		client:               config.GetClient(context.Background()),
 	}
 
 	return b
@@ -232,7 +235,7 @@ func (b *batchList) send(events []*Event) {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", fmt.Sprintf("auditr-agent-go/%s", version))
 
-		res, err = config.GetClient(ctx).Do(req)
+		res, err = b.client.Do(req)
 		if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
 			continue
 		}
