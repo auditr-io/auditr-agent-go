@@ -12,7 +12,6 @@ import (
 	"path"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 )
@@ -52,14 +51,6 @@ var (
 
 	// APIKey is the API key to use with API calls
 	APIKey string
-
-	GetEventsClient ClientProvider = DefaultEventsClientProvider
-	getConfigClient ClientProvider = DefaultConfigClientProvider
-	clientOverriden bool
-
-	cacheTicker *time.Ticker
-	cancelFunc  context.CancelFunc
-	filec       chan struct{}
 )
 
 // Acquired configuration
@@ -69,7 +60,7 @@ var (
 	TargetRoutes  []Route
 	SampleRoutes  []Route
 	Flush         bool
-	cacheDuration time.Duration = 5 * 60 * time.Second
+	cacheDuration time.Duration = 60 * time.Second
 
 	MaxEventsPerBatch    uint
 	MaxConcurrentBatches uint
@@ -77,6 +68,16 @@ var (
 	SendInterval         time.Duration
 	BlockOnSend          bool
 	BlockOnResponse      bool
+)
+
+var (
+	GetEventsClient ClientProvider = DefaultEventsClientProvider
+	getConfigClient ClientProvider = DefaultConfigClientProvider
+	clientOverriden bool
+
+	cacheTicker = time.NewTicker(cacheDuration)
+	cancelFunc  context.CancelFunc
+	filec       chan struct{}
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -130,13 +131,13 @@ func Init(options ...ConfigOption) error {
 		log.Printf("Error watching file: %+v", err)
 	}
 
-	if clientOverriden {
-		configure(ctx)
-	} else {
-		// 	filec = make(chan struct{})
-		// 	configureFromFile(ctx)
-		<-filec
-	}
+	// if clientOverriden {
+	// 	configure(ctx)
+	// } else {
+	// 	// 	filec = make(chan struct{})
+	// 	// 	configureFromFile(ctx)
+	// }
+	<-filec
 
 	return nil
 }
@@ -173,37 +174,37 @@ func ensureSeedConfig() {
 	}
 }
 
-func configure(ctx context.Context) error {
-	const maxAttempts = uint64(2)
-	bc := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
-	bo := backoff.WithMaxRetries(bc, maxAttempts)
-	op := func() error {
-		body, err := getConfig(ctx)
-		if err != nil {
-			return err
-		}
+// func configure(ctx context.Context) error {
+// 	const maxAttempts = uint64(2)
+// 	bc := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
+// 	bo := backoff.WithMaxRetries(bc, maxAttempts)
+// 	op := func() error {
+// 		body, err := getConfig(ctx)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		err = setConfig(body)
-		if err != nil {
-			return err
-		}
+// 		err = setConfig(body)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		refresh(ctx)
-		return nil
-	}
+// 		refresh(ctx)
+// 		return nil
+// 	}
 
-	t := time.Now()
-	log.Println("configuring")
-	if err := backoff.Retry(op, bo); err != nil {
-		log.Fatalf("Failed to get configuration after %d attempts: %s",
-			maxAttempts,
-			err,
-		)
-	}
-	log.Printf("configured [%dms]", time.Since(t).Milliseconds())
+// 	t := time.Now()
+// 	log.Println("configuring")
+// 	if err := backoff.Retry(op, bo); err != nil {
+// 		log.Fatalf("Failed to get configuration after %d attempts: %s",
+// 			maxAttempts,
+// 			err,
+// 		)
+// 	}
+// 	log.Printf("configured [%dms]", time.Since(t).Milliseconds())
 
-	return nil
-}
+// 	return nil
+// }
 
 func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 	done := make(chan struct{})
@@ -242,29 +243,46 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 				log.Printf("watcher config file found [%dms]", time.Since(t1).Milliseconds())
 				t1 = time.Now()
 
-				body, err := getConfigFromFile()
-				if err != nil {
-					log.Println("Error reading config file", err)
-					continue
-				}
-
-				if len(body) == 0 {
-					log.Println("Config body is empty")
-					continue
-				}
-
-				if err := setConfig(body); err != nil {
-					log.Printf("watcher error setting config %+v", err)
+				if err := configure(); err != nil {
+					log.Printf("watcher error configuring: %+v", err)
 					continue
 				}
 
 				filec <- struct{}{}
+
+				// body, err := getConfigFromFile()
+				// if err != nil {
+				// 	log.Println("Error reading config file", err)
+				// 	continue
+				// }
+
+				// if len(body) == 0 {
+				// 	log.Println("Config body is empty")
+				// 	continue
+				// }
+
+				// if err := setConfig(body); err != nil {
+				// 	log.Printf("watcher error setting config %+v", err)
+				// 	continue
+				// }
+
+				// filec <- struct{}{}
+
+				// if cacheTicker != nil {
+				// 	cacheTicker.Reset(cacheDuration)
+				// } else {
+				// 	cacheTicker = time.NewTicker(cacheDuration)
+				// }
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					log.Println("watcher error not ok")
 					continue
 				}
 				log.Printf("error: %+v", err)
+			case <-cacheTicker.C:
+				if err := configure(); err != nil {
+					log.Printf("watcher error configuring: %+v", err)
+				}
 			}
 		}
 	}()
@@ -274,6 +292,79 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 	}
 
 	return done, nil
+}
+
+func configure() error {
+	body, err := getConfigFromFile()
+	if err != nil {
+
+		return err
+	}
+
+	if len(body) == 0 {
+		return fmt.Errorf("Config body is empty")
+	}
+
+	if err := setConfig(body); err != nil {
+		return err
+	}
+
+	cacheTicker.Reset(cacheDuration)
+
+	return nil
+}
+
+func getConfigFromFile() ([]byte, error) {
+	t1 := time.Now()
+	log.Println("get config file")
+	cfg, err := os.Open("/tmp/config")
+	if err != nil {
+		return nil, err
+	}
+	defer cfg.Close()
+	body, err := ioutil.ReadAll(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("got config file [%dms]", time.Since(t1).Milliseconds())
+	return body, nil
+}
+
+func setConfig(body []byte) error {
+	var c *config
+	err := json.Unmarshal(body, &c)
+	if err != nil {
+		log.Printf("Error unmarshalling body - Error: %s, Body: %s", err, string(body))
+		return err
+	}
+
+	BaseURL = c.BaseURL
+
+	url, err := url.Parse(c.BaseURL)
+	if err != nil {
+		log.Printf("Error parsing BaseURL: %s", c.BaseURL)
+		return err
+	}
+	url.Path = path.Join(url.Path, c.EventsPath)
+	EventsURL = url.String()
+
+	TargetRoutes = c.TargetRoutes
+	SampleRoutes = c.SampleRoutes
+	if c.CacheDuration > 0 {
+		cacheDuration = time.Duration(c.CacheDuration * uint(time.Second))
+	}
+
+	Flush = c.Flush
+
+	MaxEventsPerBatch = c.MaxEventsPerBatch
+	MaxConcurrentBatches = c.MaxConcurrentBatches
+	PendingWorkCapacity = c.PendingWorkCapacity
+	SendInterval = time.Duration(c.SendInterval * uint(time.Millisecond))
+	BlockOnSend = c.BlockOnSend
+	BlockOnResponse = c.BlockOnResponse
+
+	return nil
 }
 
 // func configureFromFile(ctx context.Context) error {
@@ -315,42 +406,6 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 // 	return nil
 // }
 
-func setConfig(body []byte) error {
-	var c *config
-	err := json.Unmarshal(body, &c)
-	if err != nil {
-		log.Printf("Error unmarshalling body - Error: %s, Body: %s", err, string(body))
-		return err
-	}
-
-	BaseURL = c.BaseURL
-
-	url, err := url.Parse(c.BaseURL)
-	if err != nil {
-		log.Printf("Error parsing BaseURL: %s", c.BaseURL)
-		return err
-	}
-	url.Path = path.Join(url.Path, c.EventsPath)
-	EventsURL = url.String()
-
-	TargetRoutes = c.TargetRoutes
-	SampleRoutes = c.SampleRoutes
-	if c.CacheDuration > 0 {
-		cacheDuration = time.Duration(c.CacheDuration * uint(time.Second))
-	}
-
-	Flush = c.Flush
-
-	MaxEventsPerBatch = c.MaxEventsPerBatch
-	MaxConcurrentBatches = c.MaxConcurrentBatches
-	PendingWorkCapacity = c.PendingWorkCapacity
-	SendInterval = time.Duration(c.SendInterval * uint(time.Millisecond))
-	BlockOnSend = c.BlockOnSend
-	BlockOnResponse = c.BlockOnResponse
-
-	return nil
-}
-
 // getConfig acquires configuration from the seed URL
 // func getConfig(ctx context.Context) error {
 // 	body, err := getConfigFromURL(ctx)
@@ -383,71 +438,54 @@ func setConfig(body []byte) error {
 // 	return nil
 // }
 
-func getConfigFromFile() ([]byte, error) {
-	t1 := time.Now()
-	log.Println("get config file")
-	cfg, err := os.Open("/tmp/config")
-	if err != nil {
-		return nil, err
-	}
-	defer cfg.Close()
-	body, err := ioutil.ReadAll(cfg)
-	if err != nil {
-		return nil, err
-	}
+// func getConfig(ctx context.Context) ([]byte, error) {
+// 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ConfigURL, nil)
+// 	if err != nil {
+// 		log.Printf("Error creating request: %s", err)
+// 		return nil, err
+// 	}
+// 	req.Header.Set("Content-Type", "application/json")
 
-	log.Printf("got config file [%dms]", time.Since(t1).Milliseconds())
-	return body, nil
-}
+// 	t1 := time.Now()
+// 	log.Println("get config url")
+// 	res, err := getConfigClient().Do(req)
+// 	log.Printf("got config url [%dms]", time.Since(t1).Milliseconds())
+// 	if err != nil {
+// 		log.Printf("Error getting config: %s", err)
+// 		return nil, err
+// 	}
+// 	defer res.Body.Close()
+// 	body, err := ioutil.ReadAll(res.Body)
 
-func getConfig(ctx context.Context) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ConfigURL, nil)
-	if err != nil {
-		log.Printf("Error creating request: %s", err)
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
+// 	if res.StatusCode < 200 || res.StatusCode > 299 {
+// 		if err != nil {
+// 			log.Printf("Error reading response: %s", err)
+// 			return nil, err
+// 		}
 
-	t1 := time.Now()
-	log.Println("get config url")
-	res, err := getConfigClient().Do(req)
-	log.Printf("got config url [%dms]", time.Since(t1).Milliseconds())
-	if err != nil {
-		log.Printf("Error getting config: %s", err)
-		return nil, err
-	}
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
+// 		return nil, fmt.Errorf("Error getting config - Status: %d, Response: %s", res.StatusCode, string(body))
+// 	}
 
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		if err != nil {
-			log.Printf("Error reading response: %s", err)
-			return nil, err
-		}
+// 	return body, nil
+// }
 
-		return nil, fmt.Errorf("Error getting config - Status: %d, Response: %s", res.StatusCode, string(body))
-	}
+// func refresh(ctx context.Context) {
+// 	if cacheTicker != nil {
+// 		cacheTicker.Reset(cacheDuration)
+// 	} else {
+// 		cacheTicker = time.NewTicker(cacheDuration)
+// 	}
 
-	return body, nil
-}
-
-func refresh(ctx context.Context) {
-	if cacheTicker != nil {
-		cacheTicker.Reset(cacheDuration)
-	} else {
-		cacheTicker = time.NewTicker(cacheDuration)
-	}
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-cacheTicker.C:
-				cacheTicker.Stop()
-				configure(ctx)
-				cacheTicker.Reset(cacheDuration)
-			}
-		}
-	}()
-}
+// 	go func() {
+// 		for {
+// 			select {
+// 			case <-ctx.Done():
+// 				return
+// 			case <-cacheTicker.C:
+// 				cacheTicker.Stop()
+// 				configure(ctx)
+// 				cacheTicker.Reset(cacheDuration)
+// 			}
+// 		}
+// 	}()
+// }

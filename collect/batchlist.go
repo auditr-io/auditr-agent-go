@@ -237,6 +237,7 @@ func (b *batchList) send(events []*Event) {
 
 		res, err = b.client.Do(req)
 		if err != nil {
+			log.Printf("Retrying due to error posting: %+v", err)
 			continue
 		}
 		// if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
