@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	transports map[string]*http.Transport
+	transports = make(map[string]*http.Transport)
 
 	DefaultHTTPClientSettings = HTTPClientSettings{
 		Connect:          2 * time.Second,
