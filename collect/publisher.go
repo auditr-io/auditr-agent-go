@@ -37,7 +37,7 @@ const (
 	DefaultMaxConcurrentBatches uint = 10
 
 	// DefaultPendingWorkCapacity is pending items to hold in the work channel before blocking
-	DefaultPendingWorkCapacity uint = 10
+	DefaultPendingWorkCapacity uint = DefaultMaxEventsPerBatch * 2
 )
 
 // EventPublisher publishes audit events to auditr.
@@ -89,6 +89,7 @@ func NewEventPublisher(
 
 	if options.MaxEventsPerBatch > 0 {
 		p.maxEventsPerBatch = options.MaxEventsPerBatch
+		p.pendingWorkCapacity = options.MaxEventsPerBatch * 2
 	}
 
 	if options.SendInterval > 0 {
