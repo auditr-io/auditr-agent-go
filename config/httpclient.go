@@ -3,13 +3,15 @@ package config
 import (
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"golang.org/x/net/http2"
 )
 
 var (
-	transports = make(map[string]*http.Transport)
+	transports     = make(map[string]*http.Transport)
+	transportsSync sync.Mutex
 
 	DefaultHTTPClientSettings = HTTPClientSettings{
 		Connect:          2 * time.Second,
@@ -79,6 +81,8 @@ func NewHTTPClientWithSettings(
 	url string,
 	settings HTTPClientSettings,
 ) (*http.Client, error) {
+	transportsSync.Lock()
+	defer transportsSync.Unlock()
 	tr, ok := transports[url]
 	if !ok {
 		tr = &http.Transport{
