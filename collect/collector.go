@@ -63,6 +63,21 @@ func (c *Collector) Collect(
 	errorValue json.RawMessage,
 ) {
 	<-c.setupReadyc
+
+	log.Printf("config: BaseURL: %s, EventsURL: %s, TargetRoutes: %v, SampleRoutes %v, Flush: %t, MaxEventsPerBatch: %d, MaxConcurrentBatches: %d, PendingWorkCapacity: %d, SendInterval: %d, BlockOnSend: %t, BlockOnResponse: %t",
+		config.BaseURL,
+		config.EventsURL,
+		config.TargetRoutes,
+		config.SampleRoutes,
+		config.Flush,
+		config.MaxEventsPerBatch,
+		config.MaxConcurrentBatches,
+		config.PendingWorkCapacity,
+		config.SendInterval,
+		config.BlockOnSend,
+		config.BlockOnResponse,
+	)
+
 	route, err := c.router.FindRoute(RouteTypeTarget, httpMethod, path)
 	if err != nil {
 		panic(err)
