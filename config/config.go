@@ -212,7 +212,7 @@ func Refresh(ctx context.Context) error {
 	// ignore error if config file doesn't exist yet
 	configure()
 
-	if _, err := watchFile(ctx, configPath); err != nil {
+	if _, err := watchFile(ctx, configDir); err != nil {
 		return err
 	}
 
@@ -275,7 +275,7 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 				}
 
 				log.Printf("watcher event: name %s, op: %s", event.Name, event.Op)
-				if event.Name != "/tmp/config" {
+				if event.Name != configPath {
 					continue
 				}
 
@@ -312,7 +312,7 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 func getConfigFromFile() ([]byte, error) {
 	t1 := time.Now()
 	log.Println("get config file")
-	cfg, err := os.Open("/tmp/config")
+	cfg, err := os.Open(configPath)
 	if err != nil {
 		return nil, err
 	}
