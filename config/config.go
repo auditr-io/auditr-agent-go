@@ -81,8 +81,8 @@ var (
 	clientOverriden bool
 
 	lastRefreshed time.Time
-	cacheTicker   = time.NewTicker(cacheDuration)
-	filec         = make(chan struct{})
+	// cacheTicker   = time.NewTicker(cacheDuration)
+	filec = make(chan struct{})
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -232,7 +232,7 @@ func configure() error {
 
 	lastRefreshed = time.Now()
 
-	cacheTicker.Reset(cacheDuration)
+	// cacheTicker.Reset(cacheDuration)
 
 	return nil
 }
@@ -286,10 +286,10 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 					continue
 				}
 				log.Printf("error: %+v", err)
-			case <-cacheTicker.C:
-				if err := configure(); err != nil {
-					log.Printf("watcher error configuring: %+v", err)
-				}
+				// case <-cacheTicker.C:
+				// 	if err := configure(); err != nil {
+				// 		log.Printf("watcher error configuring: %+v", err)
+				// 	}
 			}
 		}
 	}()
