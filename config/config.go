@@ -80,10 +80,9 @@ var (
 	getConfigClient ClientProvider = DefaultConfigClientProvider
 	clientOverriden bool
 
-	watcher       *fsnotify.Watcher
+	cancelFunc    context.CancelFunc
 	lastRefreshed time.Time
-	// cacheTicker   = time.NewTicker(cacheDuration)
-	filec = make(chan struct{})
+	filec         = make(chan struct{})
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -130,8 +129,7 @@ func Init(options ...ConfigOption) error {
 
 	ensureSeedConfig()
 
-	ctx := context.Background()
-	if err := Refresh(ctx); err != nil {
+	if err := Refresh(context.Background()); err != nil {
 		log.Printf("Error refreshing config: %+v", err)
 	}
 
@@ -212,6 +210,11 @@ func Refresh(ctx context.Context) error {
 	// ignore error if config file doesn't exist yet
 	configure()
 
+	if cancelFunc != nil {
+		cancelFunc()
+	}
+
+	ctx, cancelFunc = context.WithCancel(ctx)
 	if _, err := watchFile(ctx, configDir); err != nil {
 		return err
 	}
@@ -235,8 +238,6 @@ func configure() error {
 
 	lastRefreshed = time.Now()
 
-	// cacheTicker.Reset(cacheDuration)
-
 	return nil
 }
 
@@ -245,12 +246,7 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 	t1 := time.Now()
 	log.Println("watcher waiting for config file")
 
-	if watcher != nil {
-		watcher.Close()
-	}
-
-	var err error
-	watcher, err = fsnotify.NewWatcher()
+	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return done, err
 	}
@@ -294,10 +290,6 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 					continue
 				}
 				log.Printf("error: %+v", err)
-				// case <-cacheTicker.C:
-				// 	if err := configure(); err != nil {
-				// 		log.Printf("watcher error configuring: %+v", err)
-				// 	}
 			}
 		}
 	}()
