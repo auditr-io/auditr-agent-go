@@ -80,6 +80,7 @@ var (
 	getConfigClient ClientProvider = DefaultConfigClientProvider
 	clientOverriden bool
 
+	watcher       *fsnotify.Watcher
 	lastRefreshed time.Time
 	// cacheTicker   = time.NewTicker(cacheDuration)
 	filec = make(chan struct{})
@@ -204,10 +205,12 @@ func ensureSeedConfig() {
 // }
 
 func Refresh(ctx context.Context) error {
-	if lastRefreshed.IsZero() || time.Since(lastRefreshed) > cacheDuration {
-		// ignore error if config file doesn't exist yet
-		configure()
+	if time.Since(lastRefreshed) < cacheDuration {
+		return nil
 	}
+
+	// ignore error if config file doesn't exist yet
+	configure()
 
 	if _, err := watchFile(ctx, configPath); err != nil {
 		return err
@@ -242,7 +245,12 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 	t1 := time.Now()
 	log.Println("watcher waiting for config file")
 
-	watcher, err := fsnotify.NewWatcher()
+	if watcher != nil {
+		watcher.Close()
+	}
+
+	var err error
+	watcher, err = fsnotify.NewWatcher()
 	if err != nil {
 		return done, err
 	}
