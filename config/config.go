@@ -44,6 +44,11 @@ type config struct {
 // ConfigOption is an option to override defaults
 type ConfigOption func(args ...interface{}) error
 
+const (
+	configDir  = "/tmp"
+	configPath = configDir + "/config"
+)
+
 // Seed configuration
 var (
 	// ConfigURL is the seed URL to get the rest of the configuration
@@ -75,9 +80,9 @@ var (
 	getConfigClient ClientProvider = DefaultConfigClientProvider
 	clientOverriden bool
 
-	cacheTicker = time.NewTicker(cacheDuration)
-	cancelFunc  context.CancelFunc
-	filec       chan struct{}
+	lastRefreshed time.Time
+	cacheTicker   = time.NewTicker(cacheDuration)
+	filec         = make(chan struct{})
 )
 
 // WithHTTPClient overrides the default HTTP client with given client
@@ -123,20 +128,12 @@ func Init(options ...ConfigOption) error {
 	APIKey = viper.GetString("auditr_api_key")
 
 	ensureSeedConfig()
-	ctx := context.Background()
-	ctx, cancelFunc = context.WithCancel(ctx)
 
-	filec = make(chan struct{})
-	if _, err := watchFile(ctx, "/tmp"); err != nil {
-		log.Printf("Error watching file: %+v", err)
+	ctx := context.Background()
+	if err := Refresh(ctx); err != nil {
+		log.Printf("Error refreshing config: %+v", err)
 	}
 
-	// if clientOverriden {
-	// 	configure(ctx)
-	// } else {
-	// 	// 	filec = make(chan struct{})
-	// 	// 	configureFromFile(ctx)
-	// }
 	<-filec
 
 	return nil
@@ -206,6 +203,40 @@ func ensureSeedConfig() {
 // 	return nil
 // }
 
+func Refresh(ctx context.Context) error {
+	if lastRefreshed.IsZero() || time.Since(lastRefreshed) > cacheDuration {
+		// ignore error if config file doesn't exist yet
+		configure()
+	}
+
+	if _, err := watchFile(ctx, configPath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func configure() error {
+	body, err := getConfigFromFile()
+	if err != nil {
+		return err
+	}
+
+	if len(body) == 0 {
+		return fmt.Errorf("Config body is empty")
+	}
+
+	if err := setConfig(body); err != nil {
+		return err
+	}
+
+	lastRefreshed = time.Now()
+
+	cacheTicker.Reset(cacheDuration)
+
+	return nil
+}
+
 func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 	done := make(chan struct{})
 	t1 := time.Now()
@@ -249,30 +280,6 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 				}
 
 				filec <- struct{}{}
-
-				// body, err := getConfigFromFile()
-				// if err != nil {
-				// 	log.Println("Error reading config file", err)
-				// 	continue
-				// }
-
-				// if len(body) == 0 {
-				// 	log.Println("Config body is empty")
-				// 	continue
-				// }
-
-				// if err := setConfig(body); err != nil {
-				// 	log.Printf("watcher error setting config %+v", err)
-				// 	continue
-				// }
-
-				// filec <- struct{}{}
-
-				// if cacheTicker != nil {
-				// 	cacheTicker.Reset(cacheDuration)
-				// } else {
-				// 	cacheTicker = time.NewTicker(cacheDuration)
-				// }
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					log.Println("watcher error not ok")
@@ -292,26 +299,6 @@ func watchFile(ctx context.Context, path string) (<-chan struct{}, error) {
 	}
 
 	return done, nil
-}
-
-func configure() error {
-	body, err := getConfigFromFile()
-	if err != nil {
-
-		return err
-	}
-
-	if len(body) == 0 {
-		return fmt.Errorf("Config body is empty")
-	}
-
-	if err := setConfig(body); err != nil {
-		return err
-	}
-
-	cacheTicker.Reset(cacheDuration)
-
-	return nil
 }
 
 func getConfigFromFile() ([]byte, error) {

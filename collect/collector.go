@@ -64,6 +64,7 @@ func (c *Collector) Collect(
 ) {
 	<-c.setupReadyc
 
+	config.Refresh(ctx)
 	log.Printf("config: BaseURL: %s, EventsURL: %s, TargetRoutes: %v, SampleRoutes %v, Flush: %t, MaxEventsPerBatch: %d, MaxConcurrentBatches: %d, PendingWorkCapacity: %d, SendInterval: %d, BlockOnSend: %t, BlockOnResponse: %t",
 		config.BaseURL,
 		config.EventsURL,
