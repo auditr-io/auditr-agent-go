@@ -203,7 +203,7 @@ type configurer struct {
 
 	cancelFunc    context.CancelFunc
 	lastRefreshed time.Time
-	configuredc   chan struct{}
+	configuredc   chan configuration
 	fileEventc    <-chan fsnotify.Event
 	watcherDonec  chan struct{}
 }
@@ -218,7 +218,7 @@ func NewConfigurer(options ...ConfigOption) (*configurer, error) {
 	c := &configurer{
 		config:        config,
 		lastRefreshed: time.Now().Add(-config.CacheDuration),
-		configuredc:   make(chan struct{}),
+		configuredc:   make(chan configuration),
 		watcherDonec:  make(chan struct{}),
 	}
 
@@ -273,7 +273,7 @@ func (c *configurer) configure() error {
 
 	c.lastRefreshed = time.Now()
 	go func() {
-		c.configuredc <- struct{}{}
+		c.configuredc <- *c.config
 	}()
 
 	return nil

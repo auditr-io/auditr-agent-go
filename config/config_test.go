@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/url"
 	"path"
 	"sync"
@@ -133,6 +134,12 @@ func TestRefresh_OnFreshConfig(t *testing.T) {
 		}
 	}
 
+	p := configProviders()
+	for i := 0; i < len(configs); i++ {
+		b, _ := p()
+		log.Printf("[%d] %s", i, string(b))
+	}
+
 	configIter := configProviders()
 	c, err := NewConfigurer(
 		WithConfigProvider(configIter),
@@ -151,8 +158,8 @@ func TestRefresh_OnFreshConfig(t *testing.T) {
 		defer wg.Done()
 
 		for i := 0; i < len(configs); i++ {
-			<-c.configuredc
-			assert.Equal(t, configs[i].config.CacheDuration, c.config.CacheDuration)
+			cfg := <-c.configuredc
+			assert.Equal(t, configs[i].config.CacheDuration, cfg.CacheDuration)
 		}
 	}()
 
