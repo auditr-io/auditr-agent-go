@@ -152,7 +152,7 @@ func TestRefresh_OnFreshConfig(t *testing.T) {
 
 		for i := 0; i < len(configs); i++ {
 			<-c.configuredc
-			assert.Equal(t, configs[i].config.CacheDuration, CacheDuration)
+			assert.Equal(t, configs[i].config.CacheDuration, c.config.CacheDuration)
 		}
 	}()
 
