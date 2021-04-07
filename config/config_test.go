@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/url"
 	"path"
 	"sync"
@@ -123,7 +122,7 @@ func TestRefresh_OnFreshConfig(t *testing.T) {
 		json.Unmarshal(configs[i].bytes, &configs[i].config)
 	}
 
-	fileEventChan := make(chan fsnotify.Event, 1)
+	fileEventChan := make(chan fsnotify.Event)
 
 	configProviders := func() func() ([]byte, error) {
 		i := 0
@@ -134,23 +133,12 @@ func TestRefresh_OnFreshConfig(t *testing.T) {
 		}
 	}
 
-	p := configProviders()
-	for i := 0; i < len(configs); i++ {
-		b, _ := p()
-		log.Printf("[%d] %s", i, string(b))
-	}
-
 	configIter := configProviders()
 	c, err := NewConfigurer(
 		WithConfigProvider(configIter),
 		WithFileEventChan(fileEventChan),
 	)
 	assert.NoError(t, err)
-
-	fileEventChan <- fsnotify.Event{
-		Op:   fsnotify.Write,
-		Name: configPath,
-	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -160,6 +148,13 @@ func TestRefresh_OnFreshConfig(t *testing.T) {
 		for i := 0; i < len(configs); i++ {
 			cfg := <-c.configuredc
 			assert.Equal(t, configs[i].config.CacheDuration, cfg.CacheDuration)
+
+			if i == 0 {
+				fileEventChan <- fsnotify.Event{
+					Op:   fsnotify.Write,
+					Name: configPath,
+				}
+			}
 		}
 	}()
 
