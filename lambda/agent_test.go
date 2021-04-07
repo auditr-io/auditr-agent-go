@@ -1,90 +1,77 @@
 package lambda
 
-import (
-	"bytes"
-	"encoding/json"
-	"io/ioutil"
-	"net/http"
-	"testing"
+// func TestNewAgent_ReturnsAgent(t *testing.T) {
+// 	configResponse := func() (int, []byte) {
+// 		cfg := struct {
+// 			BaseURL      string         `json:"base_url"`
+// 			EventsPath   string         `json:"events_path"`
+// 			TargetRoutes []config.Route `json:"target"`
+// 			SampleRoutes []config.Route `json:"sample"`
+// 		}{
+// 			BaseURL:    "https://dev-api.auditr.io/v1",
+// 			EventsPath: "/events",
+// 			TargetRoutes: []config.Route{
+// 				{
+// 					HTTPMethod: http.MethodPost,
+// 					Path:       "/events",
+// 				}, {
+// 					HTTPMethod: http.MethodPut,
+// 					Path:       "/events/:id",
+// 				},
+// 			},
+// 			SampleRoutes: []config.Route{
+// 				{
+// 					HTTPMethod: http.MethodGet,
+// 					Path:       "/events",
+// 				}, {
+// 					HTTPMethod: http.MethodGet,
+// 					Path:       "/events/:id",
+// 				},
+// 			},
+// 		}
 
-	"github.com/auditr-io/auditr-agent-go/config"
-	"github.com/auditr-io/auditr-agent-go/test"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-)
+// 		responseBody, _ := json.Marshal(cfg)
+// 		statusCode := 200
 
-func TestNewAgent_ReturnsAgent(t *testing.T) {
-	configResponse := func() (int, []byte) {
-		cfg := struct {
-			BaseURL      string         `json:"base_url"`
-			EventsPath   string         `json:"events_path"`
-			TargetRoutes []config.Route `json:"target"`
-			SampleRoutes []config.Route `json:"sample"`
-		}{
-			BaseURL:    "https://dev-api.auditr.io/v1",
-			EventsPath: "/events",
-			TargetRoutes: []config.Route{
-				{
-					HTTPMethod: http.MethodPost,
-					Path:       "/events",
-				}, {
-					HTTPMethod: http.MethodPut,
-					Path:       "/events/:id",
-				},
-			},
-			SampleRoutes: []config.Route{
-				{
-					HTTPMethod: http.MethodGet,
-					Path:       "/events",
-				}, {
-					HTTPMethod: http.MethodGet,
-					Path:       "/events/:id",
-				},
-			},
-		}
+// 		return statusCode, responseBody
+// 	}
 
-		responseBody, _ := json.Marshal(cfg)
-		statusCode := 200
+// 	m := &test.MockTransport{
+// 		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
+// 			m.MethodCalled("RoundTrip", req)
 
-		return statusCode, responseBody
-	}
+// 			var statusCode int
+// 			var responseBody []byte
+// 			switch req.URL.String() {
+// 			case config.ConfigURL:
+// 				statusCode, responseBody = configResponse()
+// 			}
 
-	m := &test.MockTransport{
-		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
-			m.MethodCalled("RoundTrip", req)
+// 			r := ioutil.NopCloser(bytes.NewBuffer(responseBody))
 
-			var statusCode int
-			var responseBody []byte
-			switch req.URL.String() {
-			case config.ConfigURL:
-				statusCode, responseBody = configResponse()
-			}
+// 			return &http.Response{
+// 				StatusCode: statusCode,
+// 				Body:       r,
+// 			}, nil
+// 		},
+// 	}
 
-			r := ioutil.NopCloser(bytes.NewBuffer(responseBody))
+// 	m.
+// 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
+// 		Return(mock.AnythingOfType("*http.Response"), nil)
 
-			return &http.Response{
-				StatusCode: statusCode,
-				Body:       r,
-			}, nil
-		},
-	}
+// 	mockClient := func() *http.Client {
+// 		return &http.Client{
+// 			Transport: m,
+// 		}
+// 	}
 
-	m.
-		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-		Return(mock.AnythingOfType("*http.Response"), nil)
-
-	mockClient := func() *http.Client {
-		return &http.Client{
-			Transport: m,
-		}
-	}
-
-	a, err := NewAgent(
-		config.WithHTTPClient(mockClient),
-	)
-	assert.NoError(t, err)
-	assert.NotNil(t, a)
-}
+// 	a, err := NewAgent(
+// 		config.WithHTTPClient(mockClient),
+// 	)
+// 	assert.NoError(t, err)
+// 	assert.NotNil(t, a)
+// }
 
 // func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 // 	id := "xyz"
