@@ -205,7 +205,7 @@ type configurer struct {
 	lastRefreshed time.Time
 	configuredc   chan struct{}
 	fileEventc    <-chan fsnotify.Event
-	watcherDonec  <-chan struct{}
+	watcherDonec  chan struct{}
 }
 
 // NewConfigurer creates an instance of configurer that reads and
@@ -219,6 +219,7 @@ func NewConfigurer(options ...ConfigOption) (*configurer, error) {
 		config:        config,
 		lastRefreshed: time.Now().Add(-config.CacheDuration),
 		configuredc:   make(chan struct{}),
+		watcherDonec:  make(chan struct{}),
 	}
 
 	c.getConfig = c.getConfigFromFile
@@ -248,8 +249,7 @@ func (c *configurer) Refresh(ctx context.Context) error {
 	}
 
 	ctx, c.cancelFunc = context.WithCancel(ctx)
-	var err error
-	if c.watcherDonec, err = c.watchConfigFile(ctx); err != nil {
+	if err := c.watchConfigFile(ctx); err != nil {
 		return err
 	}
 
@@ -298,11 +298,10 @@ func (c *configurer) getConfigFromFile() ([]byte, error) {
 
 // watchConfigFile watches the config file for changes and
 // configures the agent
-func (c *configurer) watchConfigFile(ctx context.Context) (<-chan struct{}, error) {
-	done := make(chan struct{})
+func (c *configurer) watchConfigFile(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return done, err
+		return err
 	}
 
 	if c.fileEventc == nil {
@@ -316,7 +315,7 @@ func (c *configurer) watchConfigFile(ctx context.Context) (<-chan struct{}, erro
 			select {
 			case <-ctx.Done():
 				log.Println("watcher done")
-				close(done)
+				c.watcherDonec <- struct{}{}
 				return
 			case event, ok := <-c.fileEventc:
 				if !ok {
@@ -348,10 +347,10 @@ func (c *configurer) watchConfigFile(ctx context.Context) (<-chan struct{}, erro
 	}()
 
 	if err := watcher.Add(configDir); err != nil {
-		return done, err
+		return err
 	}
 
-	return done, nil
+	return nil
 }
 
 // setConfig applies the configuration from the file
