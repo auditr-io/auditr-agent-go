@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"os"
 	"path"
 	"sync"
 	"testing"
@@ -192,7 +193,7 @@ func TestRefresh_CancelsRunningWatcher(t *testing.T) {
 	c, err := NewConfigurer(
 		WithConfigProvider(
 			func() ([]byte, error) {
-				return []byte(``), nil
+				return nil, os.ErrNotExist
 			},
 		),
 	)

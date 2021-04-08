@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -31,13 +30,12 @@ var (
 
 // Acquired configuration
 var (
-	BaseURL       string
-	EventsURL     string
-	TargetRoutes  []Route
-	SampleRoutes  []Route
-	Flush         bool
-	CacheDuration time.Duration = 60 * time.Second
-
+	BaseURL              string
+	EventsURL            string
+	TargetRoutes         []Route
+	SampleRoutes         []Route
+	Flush                bool
+	CacheDuration        time.Duration = 60 * time.Second
 	MaxEventsPerBatch    uint
 	MaxConcurrentBatches uint
 	PendingWorkCapacity  uint
@@ -102,14 +100,14 @@ var (
 // ConfigOption is an option to override defaults
 type ConfigOption func(args ...interface{}) error
 
-// configProvider is a function that returns configuration
-type configProvider func() ([]byte, error)
+// ConfigProvider is a function that returns configuration
+type ConfigProvider func() ([]byte, error)
 
 // HTTPClientProvider is a function that returns an HTTP client
 type HTTPClientProvider func() *http.Client
 
 // WithConfigProvider overrides the default config provider
-func WithConfigProvider(provider configProvider) ConfigOption {
+func WithConfigProvider(provider ConfigProvider) ConfigOption {
 	return func(args ...interface{}) error {
 		if c, ok := args[0].(*configurer); ok {
 			c.getConfig = provider
@@ -140,6 +138,7 @@ func WithHTTPClient(client HTTPClientProvider) ConfigOption {
 	}
 }
 
+// Init initializes the configuration
 func Init(options ...ConfigOption) error {
 	viper.SetConfigType("env")
 	viper.BindEnv("auditr_api_key")
@@ -195,10 +194,11 @@ func Refresh(ctx context.Context) error {
 	return cfgr.Refresh(ctx)
 }
 
+// configurer reads and applies configuration from a file
 type configurer struct {
 	config *configuration
 
-	getConfig       configProvider
+	getConfig       ConfigProvider
 	GetEventsClient HTTPClientProvider
 
 	cancelFunc    context.CancelFunc
@@ -208,8 +208,7 @@ type configurer struct {
 	watcherDonec  chan struct{}
 }
 
-// NewConfigurer creates an instance of configurer that reads and
-// applies configuration from a file
+// NewConfigurer creates an instance of configurer
 func NewConfigurer(options ...ConfigOption) (*configurer, error) {
 	config := &configuration{
 		CacheDuration: 60 * time.Second,
@@ -240,8 +239,12 @@ func (c *configurer) Refresh(ctx context.Context) error {
 		return nil
 	}
 
-	// ignore error if config file doesn't exist yet
-	c.configure()
+	if err := c.configure(); err != nil {
+		// ignore error if config file doesn't exist yet
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
 
 	// if watcher is already running, cancel it
 	if c.cancelFunc != nil {
@@ -264,7 +267,7 @@ func (c *configurer) configure() error {
 	}
 
 	if len(body) == 0 {
-		return fmt.Errorf("Config body is empty")
+		return errors.New("Config body is empty")
 	}
 
 	if err := c.setConfig(body); err != nil {
@@ -281,7 +284,10 @@ func (c *configurer) configure() error {
 
 // getConfigFromFile reads the config file
 func (c *configurer) getConfigFromFile() ([]byte, error) {
-	t1 := time.Now()
+	if _, err := os.Stat(configPath); err != nil {
+		return nil, err
+	}
+
 	cfg, err := os.Open(configPath)
 	if err != nil {
 		return nil, err
@@ -292,7 +298,6 @@ func (c *configurer) getConfigFromFile() ([]byte, error) {
 		return nil, err
 	}
 
-	log.Printf("got config file [%dms]", time.Since(t1).Milliseconds())
 	return body, nil
 }
 
@@ -314,7 +319,6 @@ func (c *configurer) watchConfigFile(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("watcher done")
 				c.watcherDonec <- struct{}{}
 				return
 			case event, ok := <-c.fileEventc:
@@ -326,14 +330,15 @@ func (c *configurer) watchConfigFile(ctx context.Context) error {
 					continue
 				}
 
-				log.Printf("watcher event: name %s, op: %s", event.Name, event.Op)
 				if event.Name != configPath {
 					continue
 				}
 
+				// todo: emit to metrics chan
 				log.Printf("watcher config file found [%dms]", time.Since(c.lastRefreshed).Milliseconds())
 
 				if err := c.configure(); err != nil {
+					// todo: emit to debug chan
 					log.Printf("watcher error configuring: %+v", err)
 					continue
 				}
@@ -341,6 +346,7 @@ func (c *configurer) watchConfigFile(ctx context.Context) error {
 				if !ok {
 					continue
 				}
+				// todo: emit to debug chan
 				log.Printf("error: %+v", err)
 			}
 		}
@@ -357,7 +363,6 @@ func (c *configurer) watchConfigFile(ctx context.Context) error {
 func (c *configurer) setConfig(body []byte) error {
 	err := json.Unmarshal(body, &c.config)
 	if err != nil {
-		log.Printf("Error unmarshalling body - Error: %s, Body: %s", err, string(body))
 		return err
 	}
 
@@ -365,7 +370,6 @@ func (c *configurer) setConfig(body []byte) error {
 
 	url, err := url.Parse(c.config.BaseURL)
 	if err != nil {
-		log.Printf("Error parsing BaseURL: %s", c.config.BaseURL)
 		return err
 	}
 	url.Path = path.Join(url.Path, c.config.EventsPath)
@@ -384,38 +388,3 @@ func (c *configurer) setConfig(body []byte) error {
 
 	return nil
 }
-
-// Init initializes the configuration before use
-// func Init(options ...ConfigOption) error {
-// 	for _, opt := range options {
-// 		if err := opt(); err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	viper.SetConfigType("env")
-// 	viper.BindEnv("auditr_api_key")
-
-// 	// todo: rename to env file
-// 	// If a config file is available, load the env vars in it
-// 	if configFile, ok := os.LookupEnv("CONFIG"); ok {
-// 		viper.SetConfigFile(configFile)
-
-// 		if err := viper.ReadInConfig(); err != nil {
-// 			log.Printf("Error reading config file: %v\n", err)
-
-// 		}
-// 	}
-
-// 	APIKey = viper.GetString("auditr_api_key")
-
-// 	ensureSeedConfig()
-
-// 	if err := Refresh(context.Background()); err != nil {
-// 		log.Printf("Error refreshing config: %+v", err)
-// 	}
-
-// 	<-filec
-
-// 	return nil
-// }
