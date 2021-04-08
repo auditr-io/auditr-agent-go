@@ -1,9 +1,20 @@
 package collect
 
 import (
+	"bytes"
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
+	"strings"
+	"sync"
+	"testing"
+	"time"
 
 	"github.com/auditr-io/auditr-agent-go/config"
+	"github.com/auditr-io/auditr-agent-go/lambda/events"
+	"github.com/auditr-io/auditr-agent-go/test"
+	"github.com/mitchellh/mapstructure"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -29,419 +40,358 @@ func (m *mockBuilder) Build(
 	return m.fn(m, routeType, route, request, response, errorValue)
 }
 
-// func TestPublish_PublishesEvent(t *testing.T) {
-// 	expectedRequest := events.APIGatewayProxyRequest{
-// 		HTTPMethod: http.MethodGet,
-// 		RequestContext: events.APIGatewayProxyRequestContext{
-// 			RequestID: "request-id",
-// 			Identity: events.APIGatewayRequestIdentity{
-// 				SourceIP: "1.2.3.4",
-// 			},
-// 			Authorizer: map[string]interface{}{
-// 				"claims": map[string]interface{}{
-// 					"username": "google_114080443625699078741",
-// 					"iss":      "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_0c4UH1XR0",
-// 				},
-// 			},
-// 		},
-// 	}
+func TestPublish_PublishesEvent(t *testing.T) {
+	expectedRequest := events.APIGatewayProxyRequest{
+		HTTPMethod: http.MethodGet,
+		RequestContext: events.APIGatewayProxyRequestContext{
+			RequestID: "request-id",
+			Identity: events.APIGatewayRequestIdentity{
+				SourceIP: "1.2.3.4",
+			},
+			Authorizer: map[string]interface{}{
+				"claims": map[string]interface{}{
+					"username": "google_114080443625699078741",
+					"iss":      "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_0c4UH1XR0",
+				},
+			},
+		},
+	}
 
-// 	expectedResponse := Response{
-// 		StatusCode: 200,
-// 	}
+	expectedResponse := Response{
+		StatusCode: 200,
+	}
 
-// 	type errorMessage struct {
-// 		Error string
-// 	}
+	type errorMessage struct {
+		Error string
+	}
 
-// 	expectedEvent := &Event{
-// 		Action:     expectedRequest.HTTPMethod,
-// 		Location:   expectedRequest.RequestContext.Identity.SourceIP,
-// 		RequestID:  expectedRequest.RequestContext.RequestID,
-// 		RouteType:  RouteTypeTarget,
-// 		HTTPMethod: expectedRequest.HTTPMethod,
-// 		RoutePath:  "/person/:id",
-// 		Request:    expectedRequest,
-// 		Response:   events.APIGatewayProxyResponse{},
-// 		Error: errorMessage{
-// 			Error: "test error",
-// 		},
-// 	}
+	expectedEvent := &Event{
+		Action:     expectedRequest.HTTPMethod,
+		Location:   expectedRequest.RequestContext.Identity.SourceIP,
+		RequestID:  expectedRequest.RequestContext.RequestID,
+		RouteType:  RouteTypeTarget,
+		HTTPMethod: expectedRequest.HTTPMethod,
+		RoutePath:  "/person/:id",
+		Request:    expectedRequest,
+		Response:   events.APIGatewayProxyResponse{},
+		Error: errorMessage{
+			Error: "test error",
+		},
+	}
 
-// 	expectedRoute := &config.Route{
-// 		HTTPMethod: expectedEvent.HTTPMethod,
-// 		Path:       expectedEvent.RoutePath,
-// 	}
+	expectedRoute := &config.Route{
+		HTTPMethod: expectedEvent.HTTPMethod,
+		Path:       expectedEvent.RoutePath,
+	}
 
-// 	cfg := struct {
-// 		BaseURL      string         `json:"base_url"`
-// 		EventsPath   string         `json:"events_path"`
-// 		TargetRoutes []config.Route `json:"target"`
-// 		SampleRoutes []config.Route `json:"sample"`
-// 	}{
-// 		BaseURL:    "https://dev-api.auditr.io/v1",
-// 		EventsPath: "/events",
-// 		TargetRoutes: []config.Route{
-// 			{
-// 				HTTPMethod: http.MethodPost,
-// 				Path:       "/events",
-// 			}, {
-// 				HTTPMethod: http.MethodPut,
-// 				Path:       "/events/:id",
-// 			},
-// 		},
-// 		SampleRoutes: []config.Route{
-// 			{
-// 				HTTPMethod: http.MethodGet,
-// 				Path:       "/events",
-// 			}, {
-// 				HTTPMethod: http.MethodGet,
-// 				Path:       "/events/:id",
-// 			},
-// 		},
-// 	}
+	gwRes, _ := json.Marshal(expectedEvent.Response.(events.APIGatewayProxyResponse))
+	errRes, _ := json.Marshal(expectedEvent.Error)
 
-// 	configResponse := func() (int, []byte) {
-// 		statusCode := 200
-// 		cfgJSON, _ := json.Marshal(cfg)
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
+			m.MethodCalled("RoundTrip", req)
 
-// 		return statusCode, cfgJSON
-// 	}
+			reqBody, err := ioutil.ReadAll(req.Body)
+			assert.NoError(t, err)
 
-// 	eventResponse := func() (int, []byte) {
-// 		statusCode := 200
-// 		// eventJSON, _ := json.Marshal(event)
+			var eventBatch []*Event
+			err = json.Unmarshal(reqBody, &eventBatch)
+			assert.NoError(t, err)
+			event := eventBatch[0]
+			assert.True(t, strings.HasPrefix(event.ID, "evt_"))
+			assert.Equal(t, expectedEvent.Action, event.Action)
+			assert.Equal(t, expectedEvent.Location, event.Location)
+			assert.Equal(t, expectedEvent.RequestID, event.RequestID)
+			assert.GreaterOrEqual(t, time.Now().UTC().Unix(), event.RequestedAt)
+			assert.Equal(t, expectedEvent.RouteType, event.RouteType)
+			var eventReq events.APIGatewayProxyRequest
+			mapstructure.Decode(event.Request, &eventReq)
+			assert.Equal(t, expectedEvent.Request, eventReq)
 
-// 		return statusCode, []byte(`[
-// 			{
-// 				"status": 200
-// 			}
-// 		]`)
-// 	}
+			var eventRes events.APIGatewayProxyResponse
+			mapstructure.Decode(event.Response, &eventRes)
+			assert.Equal(t, expectedEvent.Response, eventRes)
 
-// 	gwRes, _ := json.Marshal(expectedEvent.Response.(events.APIGatewayProxyResponse))
-// 	errRes, _ := json.Marshal(expectedEvent.Error)
+			var eventErr errorMessage
+			mapstructure.Decode(event.Error, &eventErr)
+			assert.Equal(t, expectedEvent.Error, eventErr)
 
-// 	m := &test.MockTransport{
-// 		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
-// 			m.MethodCalled("RoundTrip", req)
+			r := ioutil.NopCloser(bytes.NewBuffer([]byte(`[
+				{
+					"status": 200
+				}
+			]`)))
 
-// 			var statusCode int
-// 			var responseBody []byte
-// 			switch req.URL.String() {
-// 			case config.ConfigURL:
-// 				statusCode, responseBody = configResponse()
-// 			case config.EventsURL:
-// 				reqBody, err := ioutil.ReadAll(req.Body)
-// 				assert.NoError(t, err)
+			return &http.Response{
+				StatusCode: 200,
+				Body:       r,
+			}, nil
+		},
+	}
 
-// 				var eventBatch []*Event
-// 				err = json.Unmarshal(reqBody, &eventBatch)
-// 				assert.NoError(t, err)
-// 				event := eventBatch[0]
-// 				assert.True(t, strings.HasPrefix(event.ID, "evt_"))
-// 				assert.Equal(t, expectedEvent.Action, event.Action)
-// 				assert.Equal(t, expectedEvent.Location, event.Location)
-// 				assert.Equal(t, expectedEvent.RequestID, event.RequestID)
-// 				assert.GreaterOrEqual(t, time.Now().UTC().Unix(), event.RequestedAt)
-// 				assert.Equal(t, expectedEvent.RouteType, event.RouteType)
-// 				var eventReq events.APIGatewayProxyRequest
-// 				mapstructure.Decode(event.Request, &eventReq)
-// 				assert.Equal(t, expectedEvent.Request, eventReq)
+	m.
+		On("RoundTrip", mock.AnythingOfType("*http.Request")).
+		Return(mock.AnythingOfType("*http.Response"), nil).Once()
 
-// 				var eventRes events.APIGatewayProxyResponse
-// 				mapstructure.Decode(event.Response, &eventRes)
-// 				assert.Equal(t, expectedEvent.Response, eventRes)
+	config.NewConfigurer(
+		config.WithConfigProvider(func() ([]byte, error) {
+			return []byte(`{
+				"base_url": "https://dev-api.auditr.io/v1",
+				"events_path": "/events",
+				"target": [
+					{
+						"method": "GET",
+						"path": "/person/:id"
+					}
+				],
+				"sample": [],
+				"flush": false,
+				"cache_duration": 2,
+				"max_events_per_batch": 10,
+				"max_concurrent_batches": 10,
+				"pending_work_capacity": 20,
+				"send_interval": 20,
+				"block_on_send": false,
+				"block_on_response": true
+			}`), nil
+		}),
+		config.WithHTTPClient(func() *http.Client {
+			return &http.Client{
+				Transport: m,
+			}
+		}),
+	)
 
-// 				var eventErr errorMessage
-// 				mapstructure.Decode(event.Error, &eventErr)
-// 				assert.Equal(t, expectedEvent.Error, eventErr)
+	b := &mockBuilder{
+		fn: func(
+			m *mockBuilder,
+			routeType RouteType,
+			route *config.Route,
+			request interface{},
+			response json.RawMessage,
+			errorValue json.RawMessage,
+		) (*Event, error) {
+			m.MethodCalled(
+				"Build",
+				routeType,
+				route,
+				request,
+				gwRes,
+				errRes,
+			)
 
-// 				statusCode, responseBody = eventResponse()
-// 			}
+			e := expectedEvent
+			e.ID = "evt_xxxxx"
 
-// 			r := ioutil.NopCloser(bytes.NewBuffer(responseBody))
+			return e, nil
+		},
+	}
 
-// 			return &http.Response{
-// 				StatusCode: statusCode,
-// 				Body:       r,
-// 			}, nil
-// 		},
-// 	}
+	b.On(
+		"Build",
+		expectedEvent.RouteType,
+		expectedRoute,
+		expectedEvent.Request.(events.APIGatewayProxyRequest),
+		gwRes,
+		errRes,
+	).Return(expectedEvent, nil).Once()
 
-// 	m.
-// 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-// 		Return(mock.AnythingOfType("*http.Response"), nil)
-// 		// .Twice()
+	p, err := NewEventPublisher(
+		[]EventBuilder{b},
+		&PublisherOptions{},
+	)
+	assert.NoError(t, err)
 
-// 	config.Init(
-// 		config.WithHTTPClient(func() *http.Client {
-// 			return &http.Client{
-// 				Transport: m,
-// 			}
-// 		}),
-// 	)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		res := <-p.responses
+		assert.Equal(t, expectedResponse, res)
+	}()
 
-// 	b := &mockBuilder{
-// 		fn: func(
-// 			m *mockBuilder,
-// 			routeType RouteType,
-// 			route *config.Route,
-// 			request interface{},
-// 			response json.RawMessage,
-// 			errorValue json.RawMessage,
-// 		) (*Event, error) {
-// 			m.MethodCalled(
-// 				"Build",
-// 				routeType,
-// 				route,
-// 				request,
-// 				gwRes,
-// 				errRes,
-// 			)
+	p.Publish(
+		expectedEvent.RouteType,
+		expectedRoute,
+		expectedEvent.Request.(events.APIGatewayProxyRequest),
+		gwRes,
+		errRes,
+	)
 
-// 			e := expectedEvent
-// 			e.ID = "evt_xxxxx"
+	wg.Wait()
 
-// 			return e, nil
-// 		},
-// 	}
+	assert.True(t, m.AssertExpectations(t))
+	assert.True(t, b.AssertExpectations(t))
+}
 
-// 	b.On(
-// 		"Build",
-// 		expectedEvent.RouteType,
-// 		expectedRoute,
-// 		expectedEvent.Request.(events.APIGatewayProxyRequest),
-// 		gwRes,
-// 		errRes,
-// 	).Return(expectedEvent, nil).Once()
+func TestFlush_PublishesEvent(t *testing.T) {
+	expectedRequest := events.APIGatewayProxyRequest{
+		HTTPMethod: http.MethodGet,
+		RequestContext: events.APIGatewayProxyRequestContext{
+			RequestID: "request-id",
+			Identity: events.APIGatewayRequestIdentity{
+				SourceIP: "1.2.3.4",
+			},
+			Authorizer: map[string]interface{}{
+				"claims": map[string]interface{}{
+					"username": "google_114080443625699078741",
+					"iss":      "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_0c4UH1XR0",
+				},
+			},
+		},
+	}
 
-// 	p, err := NewEventPublisher(
-// 		[]EventBuilder{b},
-// 		&PublisherOptions{},
-// 	)
-// 	assert.NoError(t, err)
+	type errorMessage struct {
+		Error string
+	}
 
-// 	var wg sync.WaitGroup
-// 	wg.Add(1)
-// 	go func() {
-// 		defer wg.Done()
-// 		res := <-p.responses
-// 		assert.Equal(t, expectedResponse, res)
-// 	}()
+	expectedEvent := &Event{
+		Action:     expectedRequest.HTTPMethod,
+		Location:   expectedRequest.RequestContext.Identity.SourceIP,
+		RequestID:  expectedRequest.RequestContext.RequestID,
+		RouteType:  RouteTypeTarget,
+		HTTPMethod: expectedRequest.HTTPMethod,
+		RoutePath:  "/person/:id",
+		Request:    expectedRequest,
+		Response:   events.APIGatewayProxyResponse{},
+		Error: errorMessage{
+			Error: "test error",
+		},
+	}
 
-// 	p.Publish(
-// 		expectedEvent.RouteType,
-// 		expectedRoute,
-// 		expectedEvent.Request.(events.APIGatewayProxyRequest),
-// 		gwRes,
-// 		errRes,
-// 	)
+	expectedRoute := &config.Route{
+		HTTPMethod: expectedEvent.HTTPMethod,
+		Path:       expectedEvent.RoutePath,
+	}
 
-// 	wg.Wait()
+	gwRes, _ := json.Marshal(expectedEvent.Response.(events.APIGatewayProxyResponse))
+	errRes, _ := json.Marshal(expectedEvent.Error)
 
-// 	assert.True(t, m.AssertExpectations(t))
-// 	assert.True(t, b.AssertExpectations(t))
-// }
+	m := &test.MockTransport{
+		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
+			m.MethodCalled("RoundTrip", req)
 
-// func TestFlush_PublishesEvent(t *testing.T) {
-// 	expectedRequest := events.APIGatewayProxyRequest{
-// 		HTTPMethod: http.MethodGet,
-// 		RequestContext: events.APIGatewayProxyRequestContext{
-// 			RequestID: "request-id",
-// 			Identity: events.APIGatewayRequestIdentity{
-// 				SourceIP: "1.2.3.4",
-// 			},
-// 			Authorizer: map[string]interface{}{
-// 				"claims": map[string]interface{}{
-// 					"username": "google_114080443625699078741",
-// 					"iss":      "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_0c4UH1XR0",
-// 				},
-// 			},
-// 		},
-// 	}
+			reqBody, err := ioutil.ReadAll(req.Body)
+			assert.NoError(t, err)
 
-// 	type errorMessage struct {
-// 		Error string
-// 	}
+			var eventBatch []*Event
+			err = json.Unmarshal(reqBody, &eventBatch)
+			assert.NoError(t, err)
+			event := eventBatch[0]
+			assert.True(t, strings.HasPrefix(event.ID, "evt_"))
+			assert.Equal(t, expectedEvent.Action, event.Action)
+			assert.Equal(t, expectedEvent.Location, event.Location)
+			assert.Equal(t, expectedEvent.RequestID, event.RequestID)
+			assert.GreaterOrEqual(t, time.Now().UTC().Unix(), event.RequestedAt)
+			assert.Equal(t, expectedEvent.RouteType, event.RouteType)
+			var eventReq events.APIGatewayProxyRequest
+			mapstructure.Decode(event.Request, &eventReq)
+			assert.Equal(t, expectedEvent.Request, eventReq)
 
-// 	expectedEvent := &Event{
-// 		Action:     expectedRequest.HTTPMethod,
-// 		Location:   expectedRequest.RequestContext.Identity.SourceIP,
-// 		RequestID:  expectedRequest.RequestContext.RequestID,
-// 		RouteType:  RouteTypeTarget,
-// 		HTTPMethod: expectedRequest.HTTPMethod,
-// 		RoutePath:  "/person/:id",
-// 		Request:    expectedRequest,
-// 		Response:   events.APIGatewayProxyResponse{},
-// 		Error: errorMessage{
-// 			Error: "test error",
-// 		},
-// 	}
+			var eventRes events.APIGatewayProxyResponse
+			mapstructure.Decode(event.Response, &eventRes)
+			assert.Equal(t, expectedEvent.Response, eventRes)
 
-// 	expectedRoute := &config.Route{
-// 		HTTPMethod: expectedEvent.HTTPMethod,
-// 		Path:       expectedEvent.RoutePath,
-// 	}
+			var eventErr errorMessage
+			mapstructure.Decode(event.Error, &eventErr)
+			assert.Equal(t, expectedEvent.Error, eventErr)
 
-// 	cfg := struct {
-// 		BaseURL      string         `json:"base_url"`
-// 		EventsPath   string         `json:"events_path"`
-// 		TargetRoutes []config.Route `json:"target"`
-// 		SampleRoutes []config.Route `json:"sample"`
-// 	}{
-// 		BaseURL:    "https://dev-api.auditr.io/v1",
-// 		EventsPath: "/events",
-// 		TargetRoutes: []config.Route{
-// 			{
-// 				HTTPMethod: http.MethodPost,
-// 				Path:       "/events",
-// 			}, {
-// 				HTTPMethod: http.MethodPut,
-// 				Path:       "/events/:id",
-// 			},
-// 		},
-// 		SampleRoutes: []config.Route{
-// 			{
-// 				HTTPMethod: http.MethodGet,
-// 				Path:       "/events",
-// 			}, {
-// 				HTTPMethod: http.MethodGet,
-// 				Path:       "/events/:id",
-// 			},
-// 		},
-// 	}
+			r := ioutil.NopCloser(bytes.NewBuffer([]byte(`[
+				{
+					"status": 200
+				}
+			]`)))
 
-// 	configResponse := func() (int, []byte) {
-// 		statusCode := 200
-// 		cfgJSON, _ := json.Marshal(cfg)
+			return &http.Response{
+				StatusCode: 200,
+				Body:       r,
+			}, nil
+		},
+	}
 
-// 		return statusCode, cfgJSON
-// 	}
+	m.
+		On("RoundTrip", mock.AnythingOfType("*http.Request")).
+		Return(mock.AnythingOfType("*http.Response"), nil).Once()
 
-// 	eventResponse := func() (int, []byte) {
-// 		statusCode := 200
+	config.NewConfigurer(
+		config.WithConfigProvider(func() ([]byte, error) {
+			return []byte(`{
+				"base_url": "https://dev-api.auditr.io/v1",
+				"events_path": "/events",
+				"target": [
+					{
+						"method": "GET",
+						"path": "/person/:id"
+					}
+				],
+				"sample": [],
+				"flush": false,
+				"cache_duration": 2,
+				"max_events_per_batch": 10,
+				"max_concurrent_batches": 10,
+				"pending_work_capacity": 20,
+				"send_interval": 20,
+				"block_on_send": false,
+				"block_on_response": true
+			}`), nil
+		}),
+		config.WithHTTPClient(func() *http.Client {
+			return &http.Client{
+				Transport: m,
+			}
+		}),
+	)
 
-// 		return statusCode, []byte(`[
-// 			{
-// 				"status": 200
-// 			}
-// 		]`)
-// 	}
+	b := &mockBuilder{
+		fn: func(
+			m *mockBuilder,
+			routeType RouteType,
+			route *config.Route,
+			request interface{},
+			response json.RawMessage,
+			errorValue json.RawMessage,
+		) (*Event, error) {
+			m.MethodCalled(
+				"Build",
+				routeType,
+				route,
+				request,
+				gwRes,
+				errRes,
+			)
 
-// 	gwRes, _ := json.Marshal(expectedEvent.Response.(events.APIGatewayProxyResponse))
-// 	errRes, _ := json.Marshal(expectedEvent.Error)
+			e := expectedEvent
+			e.ID = "evt_xxxxx"
 
-// 	m := &test.MockTransport{
-// 		Fn: func(m *test.MockTransport, req *http.Request) (*http.Response, error) {
-// 			m.MethodCalled("RoundTrip", req)
+			return e, nil
+		},
+	}
 
-// 			var statusCode int
-// 			var responseBody []byte
-// 			switch req.URL.String() {
-// 			case config.ConfigURL:
-// 				statusCode, responseBody = configResponse()
-// 			case config.EventsURL:
-// 				reqBody, err := ioutil.ReadAll(req.Body)
-// 				assert.NoError(t, err)
+	b.On(
+		"Build",
+		expectedEvent.RouteType,
+		expectedRoute,
+		expectedEvent.Request.(events.APIGatewayProxyRequest),
+		gwRes,
+		errRes,
+	).Return(expectedEvent, nil).Once()
 
-// 				var eventBatch []*Event
-// 				err = json.Unmarshal(reqBody, &eventBatch)
-// 				assert.NoError(t, err)
-// 				event := eventBatch[0]
-// 				assert.True(t, strings.HasPrefix(event.ID, "evt_"))
-// 				assert.Equal(t, expectedEvent.Action, event.Action)
-// 				assert.Equal(t, expectedEvent.Location, event.Location)
-// 				assert.Equal(t, expectedEvent.RequestID, event.RequestID)
-// 				assert.GreaterOrEqual(t, time.Now().UTC().Unix(), event.RequestedAt)
-// 				assert.Equal(t, expectedEvent.RouteType, event.RouteType)
-// 				var eventReq events.APIGatewayProxyRequest
-// 				mapstructure.Decode(event.Request, &eventReq)
-// 				assert.Equal(t, expectedEvent.Request, eventReq)
+	p, err := NewEventPublisher(
+		[]EventBuilder{b},
+		&PublisherOptions{},
+	)
+	assert.NoError(t, err)
 
-// 				var eventRes events.APIGatewayProxyResponse
-// 				mapstructure.Decode(event.Response, &eventRes)
-// 				assert.Equal(t, expectedEvent.Response, eventRes)
+	p.Publish(
+		expectedEvent.RouteType,
+		expectedRoute,
+		expectedEvent.Request.(events.APIGatewayProxyRequest),
+		gwRes,
+		errRes,
+	)
 
-// 				var eventErr errorMessage
-// 				mapstructure.Decode(event.Error, &eventErr)
-// 				assert.Equal(t, expectedEvent.Error, eventErr)
+	p.Flush()
 
-// 				statusCode, responseBody = eventResponse()
-// 			}
-
-// 			r := ioutil.NopCloser(bytes.NewBuffer(responseBody))
-
-// 			return &http.Response{
-// 				StatusCode: statusCode,
-// 				Body:       r,
-// 			}, nil
-// 		},
-// 	}
-
-// 	m.
-// 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
-// 		Return(mock.AnythingOfType("*http.Response"), nil)
-// 		// .Twice()
-
-// 	config.Init(
-// 		config.WithHTTPClient(func() *http.Client {
-// 			return &http.Client{
-// 				Transport: m,
-// 			}
-// 		}),
-// 	)
-
-// 	b := &mockBuilder{
-// 		fn: func(
-// 			m *mockBuilder,
-// 			routeType RouteType,
-// 			route *config.Route,
-// 			request interface{},
-// 			response json.RawMessage,
-// 			errorValue json.RawMessage,
-// 		) (*Event, error) {
-// 			m.MethodCalled(
-// 				"Build",
-// 				routeType,
-// 				route,
-// 				request,
-// 				gwRes,
-// 				errRes,
-// 			)
-
-// 			e := expectedEvent
-// 			e.ID = "evt_xxxxx"
-
-// 			return e, nil
-// 		},
-// 	}
-
-// 	b.On(
-// 		"Build",
-// 		expectedEvent.RouteType,
-// 		expectedRoute,
-// 		expectedEvent.Request.(events.APIGatewayProxyRequest),
-// 		gwRes,
-// 		errRes,
-// 	).Return(expectedEvent, nil).Once()
-
-// 	p, err := NewEventPublisher(
-// 		[]EventBuilder{b},
-// 		&PublisherOptions{},
-// 	)
-// 	assert.NoError(t, err)
-
-// 	p.Publish(
-// 		expectedEvent.RouteType,
-// 		expectedRoute,
-// 		expectedEvent.Request.(events.APIGatewayProxyRequest),
-// 		gwRes,
-// 		errRes,
-// 	)
-
-// 	p.Flush()
-
-// 	assert.True(t, m.AssertExpectations(t))
-// 	assert.True(t, b.AssertExpectations(t))
-// }
+	assert.True(t, m.AssertExpectations(t))
+	assert.True(t, b.AssertExpectations(t))
+}
