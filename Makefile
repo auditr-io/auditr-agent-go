@@ -5,7 +5,7 @@ build:
 	go build -ldflags="-s -w" -o bin/auditr-agent-go .
 
 test:
-	CONFIG=$(shell pwd)/testdata/dotenv go test -v ./... -timeout 30s
+	ENV_PATH=$(shell pwd)/testdata/dotenv go test -v ./... -timeout 30s
 
 clean:
 	rm -rf ./bin ./vendor Gopkg.lock
