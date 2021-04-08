@@ -145,7 +145,7 @@ func Init(options ...ConfigOption) error {
 
 	// todo: rename to env file
 	// If a config file is available, load the env vars in it
-	if configFile, ok := os.LookupEnv("CONFIG"); ok {
+	if configFile, ok := os.LookupEnv("ENV_PATH"); ok {
 		viper.SetConfigFile(configFile)
 
 		if err := viper.ReadInConfig(); err != nil {

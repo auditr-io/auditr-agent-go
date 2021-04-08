@@ -49,7 +49,7 @@ jobs:
 
     - name: Test
       env:
-        CONFIG: ${{ github.workspace }}/testdata/dotenv
+        ENV_PATH: ${{ github.workspace }}/testdata/dotenv
       run: go test -timeout 30s -v ./...
       
     - name: Tag
