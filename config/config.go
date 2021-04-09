@@ -179,7 +179,7 @@ func Init() error {
 		return err
 	}
 
-	<-configurer.configuredc
+	// <-configurer.configuredc
 	return nil
 }
 
@@ -206,8 +206,14 @@ func Refresh(ctx context.Context) error {
 	return configurer.Refresh(ctx)
 }
 
+// GetConfig returns the current configuration
 func GetConfig() *Configuration {
 	return configurer.Configuration
+}
+
+// Configured returns a channel for whenever configuration is refreshed
+func Configured() <-chan Configuration {
+	return configurer.configuredc
 }
 
 // Configurer reads and applies configuration from a file
