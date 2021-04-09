@@ -11,28 +11,21 @@ import (
 // Collector determines whether to collect a request as an audit or sample event
 type Collector struct {
 	configuration *config.Configuration
-	configOptions []config.ConfigOption
 	router        *Router
 	publisher     Publisher
-
-	// setupReadyc chan struct{}
 }
 
 // NewCollector creates a new collector instance
 func NewCollector(
 	builders []EventBuilder,
 	configuration *config.Configuration, // can be nil
-	configOptions ...config.ConfigOption,
 ) (*Collector, error) {
 	c := &Collector{
 		configuration: configuration,
-		configOptions: []config.ConfigOption{},
-		// setupReadyc:   make(chan struct{}, 1),
 	}
 
-	// go func() {
 	if configuration == nil {
-		config.Init(configOptions...)
+		config.Init()
 		c.configuration = config.GetConfig()
 	}
 
@@ -40,9 +33,6 @@ func NewCollector(
 		c.configuration.TargetRoutes,
 		c.configuration.SampleRoutes,
 	)
-
-	// close(c.setupReadyc)
-	// }()
 
 	p, err := NewEventPublisher(
 		c.configuration,
@@ -67,8 +57,6 @@ func (c *Collector) Collect(
 	response json.RawMessage,
 	errorValue json.RawMessage,
 ) {
-	// <-c.setupReadyc
-
 	c.configuration.Configurer.Refresh(ctx)
 
 	log.Printf("config: BaseURL: %s, EventsURL: %s, TargetRoutes: %v, SampleRoutes %v, Flush: %t, MaxEventsPerBatch: %d, MaxConcurrentBatches: %d, PendingWorkCapacity: %d, SendInterval: %d, BlockOnSend: %t, BlockOnResponse: %t",
@@ -129,11 +117,6 @@ func (c *Collector) Collect(
 		return
 	}
 }
-
-// SetupReady returns a channel indicating whether setup is complete
-// func (c *Collector) SetupReady() <-chan struct{} {
-// 	return c.setupReadyc
-// }
 
 // Responses return a response channel
 func (c *Collector) Responses() <-chan Response {

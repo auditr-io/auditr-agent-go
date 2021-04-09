@@ -25,7 +25,6 @@ func NewAgent() (*Agent, error) {
 
 func NewAgentWithConfiguration(
 	configuration *config.Configuration,
-	configOptions ...config.ConfigOption,
 ) (*Agent, error) {
 	a := &Agent{}
 
@@ -34,7 +33,6 @@ func NewAgentWithConfiguration(
 			&APIGatewayEventBuilder{},
 		},
 		configuration,
-		configOptions...,
 	)
 	if err != nil {
 		return nil, err

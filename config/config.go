@@ -102,15 +102,12 @@ func (c *Configuration) UnmarshalJSON(b []byte) error {
 }
 
 var (
-	cfgr     *Configurer
-	cfgrOnce sync.Once
-
-	// GetEventsClient HTTPClientProvider = DefaultEventsClientProvider
+	configurer     *Configurer
+	configurerOnce sync.Once
 )
 
-// ConfigOption is an option to override defaults
-// todo: change to configureroption
-type ConfigOption func(args ...interface{}) error
+// ConfigurerOption is an option to override defaults
+type ConfigurerOption func(args ...interface{}) error
 
 // ConfigProvider is a function that returns configuration
 type ConfigProvider func() ([]byte, error)
@@ -119,7 +116,7 @@ type ConfigProvider func() ([]byte, error)
 type HTTPClientProvider func() *http.Client
 
 // WithConfigProvider overrides the default config provider
-func WithConfigProvider(provider ConfigProvider) ConfigOption {
+func WithConfigProvider(provider ConfigProvider) ConfigurerOption {
 	return func(args ...interface{}) error {
 		if c, ok := args[0].(*Configurer); ok {
 			c.getConfig = provider
@@ -131,7 +128,7 @@ func WithConfigProvider(provider ConfigProvider) ConfigOption {
 }
 
 // WithFileEventChan overrides the default file event channel
-func WithFileEventChan(eventc <-chan fsnotify.Event) ConfigOption {
+func WithFileEventChan(eventc <-chan fsnotify.Event) ConfigurerOption {
 	return func(args ...interface{}) error {
 		if c, ok := args[0].(*Configurer); ok {
 			c.fileEventc = eventc
@@ -143,7 +140,7 @@ func WithFileEventChan(eventc <-chan fsnotify.Event) ConfigOption {
 }
 
 // WithHTTPClient overrides the default HTTP client with given client
-func WithHTTPClient(client HTTPClientProvider) ConfigOption {
+func WithHTTPClient(client HTTPClientProvider) ConfigurerOption {
 	return func(args ...interface{}) error {
 		if c, ok := args[0].(*Configurer); ok {
 			c.getEventsClient = client
@@ -155,7 +152,7 @@ func WithHTTPClient(client HTTPClientProvider) ConfigOption {
 }
 
 // Init initializes the configuration
-func Init(options ...ConfigOption) error {
+func Init() error {
 	viper.SetConfigType("env")
 	viper.BindEnv("auditr_api_key")
 
@@ -173,16 +170,16 @@ func Init(options ...ConfigOption) error {
 	ensureSeedConfig()
 
 	var err error
-	cfgrOnce.Do(func() {
-		cfgr, err = NewConfigurer(options...)
+	configurerOnce.Do(func() {
+		configurer, err = NewConfigurer()
 	})
 
-	err = cfgr.Refresh(context.Background())
+	err = configurer.Refresh(context.Background())
 	if err != nil {
 		return err
 	}
 
-	<-cfgr.configuredc
+	<-configurer.configuredc
 	return nil
 }
 
@@ -206,11 +203,11 @@ func ensureSeedConfig() {
 // Refresh refreshes the configuration as the config file
 // is updated
 func Refresh(ctx context.Context) error {
-	return cfgr.Refresh(ctx)
+	return configurer.Refresh(ctx)
 }
 
 func GetConfig() *Configuration {
-	return cfgr.Configuration
+	return configurer.Configuration
 }
 
 // Configurer reads and applies configuration from a file
@@ -228,7 +225,7 @@ type Configurer struct {
 }
 
 // NewConfigurer creates an instance of configurer
-func NewConfigurer(options ...ConfigOption) (*Configurer, error) {
+func NewConfigurer(options ...ConfigurerOption) (*Configurer, error) {
 	configuration := &Configuration{
 		CacheDuration: 60 * time.Second,
 	}
