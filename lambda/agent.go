@@ -19,21 +19,21 @@ type Agent struct {
 	hooksInit sync.Once
 }
 
-func NewAgent(configOptions ...config.ConfigOption) (*Agent, error) {
+func NewAgent() (*Agent, error) {
+	return NewAgentWithConfiguration(nil)
+}
+
+func NewAgentWithConfiguration(
+	configuration *config.Configuration,
+	configOptions ...config.ConfigOption,
+) (*Agent, error) {
 	a := &Agent{}
 
 	c, err := collect.NewCollector(
 		[]collect.EventBuilder{
 			&APIGatewayEventBuilder{},
 		},
-		&collect.PublisherOptions{
-			MaxEventsPerBatch:    config.MaxEventsPerBatch,
-			MaxConcurrentBatches: config.MaxConcurrentBatches,
-			PendingWorkCapacity:  config.PendingWorkCapacity,
-			SendInterval:         config.SendInterval,
-			BlockOnSend:          config.BlockOnSend,
-			BlockOnResponse:      config.BlockOnResponse,
-		},
+		configuration,
 		configOptions...,
 	)
 	if err != nil {

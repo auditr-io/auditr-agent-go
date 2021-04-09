@@ -50,10 +50,11 @@ type Route struct {
 	Path       string `json:"path"`
 }
 
-// configuration is used to unmarshal acquired configuration
-type configuration struct {
+// Configuration is used to unmarshal acquired configuration
+type Configuration struct {
 	BaseURL              string        `json:"base_url"`
 	EventsPath           string        `json:"events_path"`
+	EventsURL            string        `json:"-"`
 	TargetRoutes         []Route       `json:"target"`
 	SampleRoutes         []Route       `json:"sample"`
 	CacheDuration        time.Duration `json:"-"`
@@ -64,11 +65,14 @@ type configuration struct {
 	SendInterval         time.Duration `json:"-"`
 	BlockOnSend          bool          `json:"block_on_send"`
 	BlockOnResponse      bool          `json:"block_on_response"`
+
+	Configurer      *Configurer `json:"-"`
+	GetEventsClient HTTPClientProvider
 }
 
 // UnmarshalJSON deserailizes JSON into configuration
-func (c *configuration) UnmarshalJSON(b []byte) error {
-	type configurationAlias configuration
+func (c *Configuration) UnmarshalJSON(b []byte) error {
+	type configurationAlias Configuration
 	cfg := &struct {
 		CacheDurationRaw uint `json:"cache_duration"`
 		SendIntervalRaw  uint `json:"send_interval"`
@@ -81,6 +85,13 @@ func (c *configuration) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
+	url, err := url.Parse(c.BaseURL)
+	if err != nil {
+		return err
+	}
+	url.Path = path.Join(url.Path, c.EventsPath)
+	c.EventsURL = url.String()
+
 	if cfg.CacheDurationRaw > 0 {
 		c.CacheDuration = time.Duration(cfg.CacheDurationRaw * uint(time.Second))
 	}
@@ -91,13 +102,14 @@ func (c *configuration) UnmarshalJSON(b []byte) error {
 }
 
 var (
-	cfgr     *configurer
+	cfgr     *Configurer
 	cfgrOnce sync.Once
 
-	GetEventsClient HTTPClientProvider = DefaultEventsClientProvider
+	// GetEventsClient HTTPClientProvider = DefaultEventsClientProvider
 )
 
 // ConfigOption is an option to override defaults
+// todo: change to configureroption
 type ConfigOption func(args ...interface{}) error
 
 // ConfigProvider is a function that returns configuration
@@ -109,7 +121,7 @@ type HTTPClientProvider func() *http.Client
 // WithConfigProvider overrides the default config provider
 func WithConfigProvider(provider ConfigProvider) ConfigOption {
 	return func(args ...interface{}) error {
-		if c, ok := args[0].(*configurer); ok {
+		if c, ok := args[0].(*Configurer); ok {
 			c.getConfig = provider
 			return nil
 		}
@@ -121,7 +133,7 @@ func WithConfigProvider(provider ConfigProvider) ConfigOption {
 // WithFileEventChan overrides the default file event channel
 func WithFileEventChan(eventc <-chan fsnotify.Event) ConfigOption {
 	return func(args ...interface{}) error {
-		if c, ok := args[0].(*configurer); ok {
+		if c, ok := args[0].(*Configurer); ok {
 			c.fileEventc = eventc
 			return nil
 		}
@@ -133,8 +145,12 @@ func WithFileEventChan(eventc <-chan fsnotify.Event) ConfigOption {
 // WithHTTPClient overrides the default HTTP client with given client
 func WithHTTPClient(client HTTPClientProvider) ConfigOption {
 	return func(args ...interface{}) error {
-		GetEventsClient = client
-		return nil
+		if c, ok := args[0].(*Configurer); ok {
+			c.getEventsClient = client
+			return nil
+		}
+
+		return errors.New("failed to override HTTP client provider")
 	}
 }
 
@@ -143,7 +159,6 @@ func Init(options ...ConfigOption) error {
 	viper.SetConfigType("env")
 	viper.BindEnv("auditr_api_key")
 
-	// todo: rename to env file
 	// If a config file is available, load the env vars in it
 	if configFile, ok := os.LookupEnv("ENV_PATH"); ok {
 		viper.SetConfigFile(configFile)
@@ -194,34 +209,39 @@ func Refresh(ctx context.Context) error {
 	return cfgr.Refresh(ctx)
 }
 
-// configurer reads and applies configuration from a file
-type configurer struct {
-	config *configuration
+func GetConfig() *Configuration {
+	return cfgr.Configuration
+}
+
+// Configurer reads and applies configuration from a file
+type Configurer struct {
+	Configuration *Configuration
 
 	getConfig       ConfigProvider
-	GetEventsClient HTTPClientProvider
+	getEventsClient HTTPClientProvider
 
 	cancelFunc    context.CancelFunc
 	lastRefreshed time.Time
-	configuredc   chan configuration
+	configuredc   chan Configuration
 	fileEventc    <-chan fsnotify.Event
 	watcherDonec  chan struct{}
 }
 
 // NewConfigurer creates an instance of configurer
-func NewConfigurer(options ...ConfigOption) (*configurer, error) {
-	config := &configuration{
+func NewConfigurer(options ...ConfigOption) (*Configurer, error) {
+	configuration := &Configuration{
 		CacheDuration: 60 * time.Second,
 	}
 
-	c := &configurer{
-		config:        config,
-		lastRefreshed: time.Now().Add(-config.CacheDuration),
-		configuredc:   make(chan configuration),
+	c := &Configurer{
+		Configuration: configuration,
+		lastRefreshed: time.Now().Add(-configuration.CacheDuration),
+		configuredc:   make(chan Configuration),
 		watcherDonec:  make(chan struct{}),
 	}
 
 	c.getConfig = c.getConfigFromFile
+	c.getEventsClient = DefaultEventsClientProvider
 
 	for _, option := range options {
 		if err := option(c); err != nil {
@@ -234,8 +254,8 @@ func NewConfigurer(options ...ConfigOption) (*configurer, error) {
 
 // Refresh refreshes the configuration as the config file
 // is updated
-func (c *configurer) Refresh(ctx context.Context) error {
-	if time.Since(c.lastRefreshed) < c.config.CacheDuration {
+func (c *Configurer) Refresh(ctx context.Context) error {
+	if time.Since(c.lastRefreshed) < c.Configuration.CacheDuration {
 		return nil
 	}
 
@@ -260,7 +280,7 @@ func (c *configurer) Refresh(ctx context.Context) error {
 }
 
 // configure reads the config file and applies the configuration
-func (c *configurer) configure() error {
+func (c *Configurer) configure() error {
 	body, err := c.getConfig()
 	if err != nil {
 		return err
@@ -276,14 +296,14 @@ func (c *configurer) configure() error {
 
 	c.lastRefreshed = time.Now()
 	go func() {
-		c.configuredc <- *c.config
+		c.configuredc <- *c.Configuration
 	}()
 
 	return nil
 }
 
 // getConfigFromFile reads the config file
-func (c *configurer) getConfigFromFile() ([]byte, error) {
+func (c *Configurer) getConfigFromFile() ([]byte, error) {
 	if _, err := os.Stat(configPath); err != nil {
 		return nil, err
 	}
@@ -303,7 +323,7 @@ func (c *configurer) getConfigFromFile() ([]byte, error) {
 
 // watchConfigFile watches the config file for changes and
 // configures the agent
-func (c *configurer) watchConfigFile(ctx context.Context) error {
+func (c *Configurer) watchConfigFile(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
@@ -360,31 +380,27 @@ func (c *configurer) watchConfigFile(ctx context.Context) error {
 }
 
 // setConfig applies the configuration from the file
-func (c *configurer) setConfig(body []byte) error {
-	err := json.Unmarshal(body, &c.config)
+func (c *Configurer) setConfig(body []byte) error {
+	err := json.Unmarshal(body, &c.Configuration)
 	if err != nil {
 		return err
 	}
 
-	BaseURL = c.config.BaseURL
+	c.Configuration.Configurer = c
+	c.Configuration.GetEventsClient = c.getEventsClient
 
-	url, err := url.Parse(c.config.BaseURL)
-	if err != nil {
-		return err
-	}
-	url.Path = path.Join(url.Path, c.config.EventsPath)
-	EventsURL = url.String()
-
-	TargetRoutes = c.config.TargetRoutes
-	SampleRoutes = c.config.SampleRoutes
-	CacheDuration = c.config.CacheDuration
-	Flush = c.config.Flush
-	MaxEventsPerBatch = c.config.MaxEventsPerBatch
-	MaxConcurrentBatches = c.config.MaxConcurrentBatches
-	PendingWorkCapacity = c.config.PendingWorkCapacity
-	SendInterval = c.config.SendInterval
-	BlockOnSend = c.config.BlockOnSend
-	BlockOnResponse = c.config.BlockOnResponse
+	BaseURL = c.Configuration.BaseURL
+	EventsURL = c.Configuration.EventsURL
+	TargetRoutes = c.Configuration.TargetRoutes
+	SampleRoutes = c.Configuration.SampleRoutes
+	CacheDuration = c.Configuration.CacheDuration
+	Flush = c.Configuration.Flush
+	MaxEventsPerBatch = c.Configuration.MaxEventsPerBatch
+	MaxConcurrentBatches = c.Configuration.MaxConcurrentBatches
+	PendingWorkCapacity = c.Configuration.PendingWorkCapacity
+	SendInterval = c.Configuration.SendInterval
+	BlockOnSend = c.Configuration.BlockOnSend
+	BlockOnResponse = c.Configuration.BlockOnResponse
 
 	return nil
 }

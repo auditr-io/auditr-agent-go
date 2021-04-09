@@ -10,38 +10,43 @@ import (
 
 // Collector determines whether to collect a request as an audit or sample event
 type Collector struct {
+	configuration *config.Configuration
 	configOptions []config.ConfigOption
 	router        *Router
 	publisher     Publisher
 
-	setupReadyc chan struct{}
+	// setupReadyc chan struct{}
 }
 
 // NewCollector creates a new collector instance
 func NewCollector(
 	builders []EventBuilder,
-	options *PublisherOptions,
+	configuration *config.Configuration, // can be nil
 	configOptions ...config.ConfigOption,
 ) (*Collector, error) {
 	c := &Collector{
+		configuration: configuration,
 		configOptions: []config.ConfigOption{},
-		setupReadyc:   make(chan struct{}, 1),
+		// setupReadyc:   make(chan struct{}, 1),
 	}
 
-	go func() {
+	// go func() {
+	if configuration == nil {
 		config.Init(configOptions...)
+		c.configuration = config.GetConfig()
+	}
 
-		c.router = NewRouter(
-			config.TargetRoutes,
-			config.SampleRoutes,
-		)
+	c.router = NewRouter(
+		c.configuration.TargetRoutes,
+		c.configuration.SampleRoutes,
+	)
 
-		close(c.setupReadyc)
-	}()
+	// close(c.setupReadyc)
+	// }()
 
 	p, err := NewEventPublisher(
+		c.configuration,
 		builders,
-		options,
 	)
 	if err != nil {
 		return nil, err
@@ -62,21 +67,22 @@ func (c *Collector) Collect(
 	response json.RawMessage,
 	errorValue json.RawMessage,
 ) {
-	<-c.setupReadyc
+	// <-c.setupReadyc
 
-	config.Refresh(ctx)
+	c.configuration.Configurer.Refresh(ctx)
+
 	log.Printf("config: BaseURL: %s, EventsURL: %s, TargetRoutes: %v, SampleRoutes %v, Flush: %t, MaxEventsPerBatch: %d, MaxConcurrentBatches: %d, PendingWorkCapacity: %d, SendInterval: %d, BlockOnSend: %t, BlockOnResponse: %t",
-		config.BaseURL,
-		config.EventsURL,
-		config.TargetRoutes,
-		config.SampleRoutes,
-		config.Flush,
-		config.MaxEventsPerBatch,
-		config.MaxConcurrentBatches,
-		config.PendingWorkCapacity,
-		config.SendInterval,
-		config.BlockOnSend,
-		config.BlockOnResponse,
+		c.configuration.BaseURL,
+		c.configuration.EventsURL,
+		c.configuration.TargetRoutes,
+		c.configuration.SampleRoutes,
+		c.configuration.Flush,
+		c.configuration.MaxEventsPerBatch,
+		c.configuration.MaxConcurrentBatches,
+		c.configuration.PendingWorkCapacity,
+		c.configuration.SendInterval,
+		c.configuration.BlockOnSend,
+		c.configuration.BlockOnResponse,
 	)
 
 	route, err := c.router.FindRoute(RouteTypeTarget, httpMethod, path)
@@ -85,7 +91,7 @@ func (c *Collector) Collect(
 	}
 
 	defer func() {
-		if config.Flush {
+		if c.configuration.Flush {
 			c.Flush()
 		}
 	}()
@@ -125,9 +131,9 @@ func (c *Collector) Collect(
 }
 
 // SetupReady returns a channel indicating whether setup is complete
-func (c *Collector) SetupReady() <-chan struct{} {
-	return c.setupReadyc
-}
+// func (c *Collector) SetupReady() <-chan struct{} {
+// 	return c.setupReadyc
+// }
 
 // Responses return a response channel
 func (c *Collector) Responses() <-chan Response {

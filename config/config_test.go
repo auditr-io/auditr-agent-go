@@ -36,7 +36,7 @@ func TestRefresh_SetsConfiguration(t *testing.T) {
 		"block_on_send": false,
 		"block_on_response": true
 	}`)
-	var expectedConfig *configuration
+	var expectedConfig *Configuration
 	json.Unmarshal(configBytes, &expectedConfig)
 
 	c, err := NewConfigurer(
@@ -73,7 +73,7 @@ func TestRefresh_SetsConfiguration(t *testing.T) {
 func TestRefresh_OnFreshConfig(t *testing.T) {
 	configs := []struct {
 		bytes  []byte
-		config *configuration
+		config *Configuration
 	}{
 		{
 			bytes: []byte(`{

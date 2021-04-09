@@ -53,6 +53,7 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 // This batch handling implementation is shamelessly borrowed from
 // Honeycomb's libhoney.
 type batchList struct {
+	configuration        *config.Configuration
 	maxEventsPerBatch    uint
 	maxConcurrentBatches uint
 
@@ -73,18 +74,20 @@ type batchList struct {
 
 // newBatchList creates a new batch list
 func newBatchList(
+	configuration *config.Configuration,
 	responses chan Response,
 	maxEventsPerBatch uint,
 	maxConcurrentBatches uint,
 ) *batchList {
 	b := &batchList{
+		configuration:        configuration,
+		client:               configuration.GetEventsClient(),
 		batches:              map[int][]*Event{},
 		overflowBatches:      map[int][]*Event{},
 		responses:            responses,
 		maxEventsPerBatch:    maxEventsPerBatch,
 		maxConcurrentBatches: maxConcurrentBatches,
 		maxBatchBytes:        int(maxEventsPerBatch) * maxEventBytes,
-		client:               config.GetEventsClient(),
 	}
 
 	return b
@@ -224,7 +227,7 @@ func (b *batchList) send(events []*Event) {
 		req, err = http.NewRequestWithContext(
 			ctx,
 			method,
-			config.EventsURL,
+			b.configuration.EventsURL,
 			eventsReader,
 		)
 		if err != nil {
@@ -240,9 +243,7 @@ func (b *batchList) send(events []*Event) {
 			log.Printf("Retrying due to error posting: %+v", err)
 			continue
 		}
-		// if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
-		// 	continue
-		// }
+
 		break
 	}
 
@@ -257,7 +258,7 @@ func (b *batchList) send(events []*Event) {
 			Err: fmt.Errorf(
 				"Error sending %s %s: status %d",
 				method,
-				config.EventsURL,
+				b.configuration.EventsURL,
 				res.StatusCode,
 			),
 			StatusCode: res.StatusCode,

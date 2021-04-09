@@ -50,6 +50,7 @@ const (
 // This batch handling implementation is shamelessly borrowed from
 // Honeycomb's libhoney.
 type EventPublisher struct {
+	configuration        *config.Configuration
 	eventBuilders        []EventBuilder
 	maxEventsPerBatch    uint
 	sendInterval         time.Duration
@@ -82,10 +83,11 @@ type PublisherOptions struct {
 // to an Event. The event builders are evaluated in order and
 // stops at the first builder that successfully maps to an Event.
 func NewEventPublisher(
+	configuration *config.Configuration,
 	eventBuilders []EventBuilder,
-	options *PublisherOptions,
 ) (*EventPublisher, error) {
 	p := &EventPublisher{
+		configuration:        configuration,
 		eventBuilders:        eventBuilders,
 		maxEventsPerBatch:    DefaultMaxEventsPerBatch,
 		sendInterval:         DefaultSendInterval,
@@ -93,30 +95,31 @@ func NewEventPublisher(
 		pendingWorkCapacity:  DefaultPendingWorkCapacity,
 	}
 
-	if options.MaxEventsPerBatch > 0 {
-		p.maxEventsPerBatch = options.MaxEventsPerBatch
-		p.pendingWorkCapacity = options.MaxEventsPerBatch * PendingWorkToMaxEventsRatio
+	if p.configuration.MaxEventsPerBatch > 0 {
+		p.maxEventsPerBatch = p.configuration.MaxEventsPerBatch
+		p.pendingWorkCapacity = p.configuration.MaxEventsPerBatch * PendingWorkToMaxEventsRatio
 	}
 
-	if options.SendInterval > 0 {
-		p.sendInterval = options.SendInterval
+	if p.configuration.SendInterval > 0 {
+		p.sendInterval = p.configuration.SendInterval
 	}
 
-	if options.MaxConcurrentBatches > 0 {
-		p.maxConcurrentBatches = options.MaxConcurrentBatches
+	if p.configuration.MaxConcurrentBatches > 0 {
+		p.maxConcurrentBatches = p.configuration.MaxConcurrentBatches
 	}
 
-	if options.PendingWorkCapacity > 0 {
-		p.pendingWorkCapacity = options.PendingWorkCapacity
+	if p.configuration.PendingWorkCapacity > 0 {
+		p.pendingWorkCapacity = p.configuration.PendingWorkCapacity
 	}
 
-	p.blockOnSend = options.BlockOnSend
-	p.blockOnResponse = options.BlockOnResponse
+	p.blockOnSend = p.configuration.BlockOnSend
+	p.blockOnResponse = p.configuration.BlockOnResponse
 
 	p.responses = make(chan Response, p.pendingWorkCapacity*2)
 
 	p.batchMaker = func() muster.Batch {
 		b := newBatchList(
+			p.configuration,
 			p.responses,
 			p.maxEventsPerBatch,
 			p.maxConcurrentBatches,

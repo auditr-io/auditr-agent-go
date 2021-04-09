@@ -2,6 +2,7 @@ package collect
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -23,8 +24,35 @@ func TestBatchListAdd(t *testing.T) {
 		ID: ksuid.New().String(),
 	}
 
+	configurer, _ := config.NewConfigurer(
+		config.WithConfigProvider(func() ([]byte, error) {
+			return []byte(`{
+				"base_url": "https://dev-api.auditr.io/v1",
+				"events_path": "/events",
+				"target": [
+					{
+						"method": "GET",
+						"path": "/person/:id"
+					}
+				],
+				"sample": [],
+				"flush": false,
+				"cache_duration": 2,
+				"max_events_per_batch": 10,
+				"max_concurrent_batches": 10,
+				"pending_work_capacity": 20,
+				"send_interval": 20,
+				"block_on_send": false,
+				"block_on_response": true
+			}`), nil
+		}),
+	)
+
+	configurer.Refresh(context.Background())
+
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -43,8 +71,35 @@ func TestReenqueue(t *testing.T) {
 		}
 	}
 
+	configurer, _ := config.NewConfigurer(
+		config.WithConfigProvider(func() ([]byte, error) {
+			return []byte(`{
+				"base_url": "https://dev-api.auditr.io/v1",
+				"events_path": "/events",
+				"target": [
+					{
+						"method": "GET",
+						"path": "/person/:id"
+					}
+				],
+				"sample": [],
+				"flush": false,
+				"cache_duration": 2,
+				"max_events_per_batch": 10,
+				"max_concurrent_batches": 10,
+				"pending_work_capacity": 20,
+				"send_interval": 20,
+				"block_on_send": false,
+				"block_on_response": true
+			}`), nil
+		}),
+	)
+
+	configurer.Refresh(context.Background())
+
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -83,7 +138,7 @@ func TestBatchListFire(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil).Once()
 
-	config.NewConfigurer(
+	configurer, _ := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
 			return []byte(`{
 				"base_url": "https://dev-api.auditr.io/v1",
@@ -112,6 +167,8 @@ func TestBatchListFire(t *testing.T) {
 		}),
 	)
 
+	configurer.Refresh(context.Background())
+
 	n := &notifier{}
 	n.On("Done").Once()
 
@@ -121,6 +178,7 @@ func TestBatchListFire(t *testing.T) {
 
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -150,7 +208,7 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil).Twice()
 
-	config.NewConfigurer(
+	configurer, _ := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
 			return []byte(`{
 				"base_url": "https://dev-api.auditr.io/v1",
@@ -179,6 +237,8 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 		}),
 	)
 
+	configurer.Refresh(context.Background())
+
 	n := &notifier{}
 	n.On("Done").Once()
 
@@ -193,6 +253,7 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -225,7 +286,7 @@ func TestSend(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil).Once()
 
-	config.NewConfigurer(
+	configurer, _ := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
 			return []byte(`{
 				"base_url": "https://dev-api.auditr.io/v1",
@@ -254,6 +315,8 @@ func TestSend(t *testing.T) {
 		}),
 	)
 
+	configurer.Refresh(context.Background())
+
 	events := make([]*Event, 3)
 	for i := 0; i < len(events); i++ {
 		events[i] = &Event{
@@ -263,6 +326,7 @@ func TestSend(t *testing.T) {
 
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -287,7 +351,7 @@ func TestSend_GetResponseOnError(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil).Twice()
 
-	config.NewConfigurer(
+	configurer, _ := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
 			return []byte(`{
 				"base_url": "https://dev-api.auditr.io/v1",
@@ -315,6 +379,8 @@ func TestSend_GetResponseOnError(t *testing.T) {
 			}
 		}),
 	)
+
+	configurer.Refresh(context.Background())
 
 	events := make([]*Event, 3)
 	for i := 0; i < len(events); i++ {
@@ -341,6 +407,7 @@ func TestSend_GetResponseOnError(t *testing.T) {
 	}()
 
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -378,7 +445,7 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil).Once()
 
-	config.NewConfigurer(
+	configurer, _ := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
 			return []byte(`{
 				"base_url": "https://dev-api.auditr.io/v1",
@@ -406,6 +473,8 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 			}
 		}),
 	)
+
+	configurer.Refresh(context.Background())
 
 	events := make([]*Event, 3)
 	for i := 0; i < len(events); i++ {
@@ -435,6 +504,7 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 	}()
 
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -454,8 +524,35 @@ func TestEncodeJSON(t *testing.T) {
 		}
 	}
 
+	configurer, _ := config.NewConfigurer(
+		config.WithConfigProvider(func() ([]byte, error) {
+			return []byte(`{
+				"base_url": "https://dev-api.auditr.io/v1",
+				"events_path": "/events",
+				"target": [
+					{
+						"method": "GET",
+						"path": "/person/:id"
+					}
+				],
+				"sample": [],
+				"flush": false,
+				"cache_duration": 2,
+				"max_events_per_batch": 10,
+				"max_concurrent_batches": 10,
+				"pending_work_capacity": 20,
+				"send_interval": 20,
+				"block_on_send": false,
+				"block_on_response": true
+			}`), nil
+		}),
+	)
+
+	configurer.Refresh(context.Background())
+
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -482,6 +579,32 @@ func TestEncodeJSON_FailsOnInvalidEvent(t *testing.T) {
 	}
 	_, expectedErr := json.Marshal(events[0])
 
+	configurer, _ := config.NewConfigurer(
+		config.WithConfigProvider(func() ([]byte, error) {
+			return []byte(`{
+				"base_url": "https://dev-api.auditr.io/v1",
+				"events_path": "/events",
+				"target": [
+					{
+						"method": "GET",
+						"path": "/person/:id"
+					}
+				],
+				"sample": [],
+				"flush": false,
+				"cache_duration": 2,
+				"max_events_per_batch": 10,
+				"max_concurrent_batches": 10,
+				"pending_work_capacity": 20,
+				"send_interval": 20,
+				"block_on_send": false,
+				"block_on_response": true
+			}`), nil
+		}),
+	)
+
+	configurer.Refresh(context.Background())
+
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -492,6 +615,7 @@ func TestEncodeJSON_FailsOnInvalidEvent(t *testing.T) {
 	}()
 
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -515,6 +639,32 @@ func TestEncodeJSON_FailsOnOversizedEvent(t *testing.T) {
 	}
 	expectedErr := fmt.Errorf("Event exceeds max size of %d bytes", maxEventBytes)
 
+	configurer, _ := config.NewConfigurer(
+		config.WithConfigProvider(func() ([]byte, error) {
+			return []byte(`{
+				"base_url": "https://dev-api.auditr.io/v1",
+				"events_path": "/events",
+				"target": [
+					{
+						"method": "GET",
+						"path": "/person/:id"
+					}
+				],
+				"sample": [],
+				"flush": false,
+				"cache_duration": 2,
+				"max_events_per_batch": 10,
+				"max_concurrent_batches": 10,
+				"pending_work_capacity": 20,
+				"send_interval": 20,
+				"block_on_send": false,
+				"block_on_response": true
+			}`), nil
+		}),
+	)
+
+	configurer.Refresh(context.Background())
+
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -525,6 +675,7 @@ func TestEncodeJSON_FailsOnOversizedEvent(t *testing.T) {
 	}()
 
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,
@@ -548,9 +699,36 @@ func TestEncodeJSON_ReenqueuesOnOversizedBatch(t *testing.T) {
 		events[i] = event // same event ID fills the same batch
 	}
 
+	configurer, _ := config.NewConfigurer(
+		config.WithConfigProvider(func() ([]byte, error) {
+			return []byte(`{
+				"base_url": "https://dev-api.auditr.io/v1",
+				"events_path": "/events",
+				"target": [
+					{
+						"method": "GET",
+						"path": "/person/:id"
+					}
+				],
+				"sample": [],
+				"flush": false,
+				"cache_duration": 2,
+				"max_events_per_batch": 10,
+				"max_concurrent_batches": 10,
+				"pending_work_capacity": 20,
+				"send_interval": 20,
+				"block_on_send": false,
+				"block_on_response": true
+			}`), nil
+		}),
+	)
+
+	configurer.Refresh(context.Background())
+
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 
 	b := newBatchList(
+		configurer.Configuration,
 		r,
 		DefaultMaxEventsPerBatch,
 		DefaultMaxConcurrentBatches,

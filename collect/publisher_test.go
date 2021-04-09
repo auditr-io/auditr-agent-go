@@ -2,6 +2,7 @@ package collect
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -133,7 +134,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil).Once()
 
-	config.NewConfigurer(
+	configurer, err := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
 			return []byte(`{
 				"base_url": "https://dev-api.auditr.io/v1",
@@ -161,6 +162,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 			}
 		}),
 	)
+
+	configurer.Refresh(context.Background())
 
 	b := &mockBuilder{
 		fn: func(
@@ -197,8 +200,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 	).Return(expectedEvent, nil).Once()
 
 	p, err := NewEventPublisher(
+		configurer.Configuration,
 		[]EventBuilder{b},
-		&PublisherOptions{},
 	)
 	assert.NoError(t, err)
 
@@ -313,7 +316,7 @@ func TestFlush_PublishesEvent(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil).Once()
 
-	config.NewConfigurer(
+	configurer, err := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
 			return []byte(`{
 				"base_url": "https://dev-api.auditr.io/v1",
@@ -341,6 +344,8 @@ func TestFlush_PublishesEvent(t *testing.T) {
 			}
 		}),
 	)
+
+	configurer.Refresh(context.Background())
 
 	b := &mockBuilder{
 		fn: func(
@@ -377,8 +382,8 @@ func TestFlush_PublishesEvent(t *testing.T) {
 	).Return(expectedEvent, nil).Once()
 
 	p, err := NewEventPublisher(
+		configurer.Configuration,
 		[]EventBuilder{b},
-		&PublisherOptions{},
 	)
 	assert.NoError(t, err)
 
