@@ -135,6 +135,8 @@ func TestRefreshRouter(t *testing.T) {
 			if i == 0 {
 				assert.Equal(t, configs[i].config.TargetRoutes, cfg.TargetRoutes)
 
+				c.OnRefresh(func() {})
+
 				route, err := collector.router.FindRoute(RouteTypeTarget, http.MethodGet, "/person/xyz")
 				assert.NoError(t, err)
 				assert.NotNil(t, route)
