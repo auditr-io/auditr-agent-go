@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	configDir  = "/tmp"
-	configPath = configDir + "/config"
+	ConfigDir  = "/tmp"
+	ConfigPath = ConfigDir + "/config"
 )
 
 // Seed configuration
@@ -179,7 +179,7 @@ func Init() error {
 		return err
 	}
 
-	// <-configurer.configuredc
+	<-configurer.Configured()
 	return nil
 }
 
@@ -213,7 +213,7 @@ func GetConfig() *Configuration {
 
 // Configured returns a channel for whenever configuration is refreshed
 func Configured() <-chan Configuration {
-	return configurer.configuredc
+	return configurer.Configured()
 }
 
 // Configurer reads and applies configuration from a file
@@ -225,9 +225,14 @@ type Configurer struct {
 
 	cancelFunc    context.CancelFunc
 	lastRefreshed time.Time
-	configuredc   chan Configuration
-	fileEventc    <-chan fsnotify.Event
-	watcherDonec  chan struct{}
+
+	configuredc    chan Configuration
+	configuredLock sync.Mutex
+	configuredCond *sync.Cond
+	configured     bool
+
+	fileEventc   <-chan fsnotify.Event
+	watcherDonec chan struct{}
 }
 
 // NewConfigurer creates an instance of configurer
@@ -237,11 +242,15 @@ func NewConfigurer(options ...ConfigurerOption) (*Configurer, error) {
 	}
 
 	c := &Configurer{
-		Configuration: configuration,
-		lastRefreshed: time.Now().Add(-configuration.CacheDuration),
-		configuredc:   make(chan Configuration),
-		watcherDonec:  make(chan struct{}),
+		Configuration:  configuration,
+		lastRefreshed:  time.Now().Add(-configuration.CacheDuration),
+		configuredc:    make(chan Configuration),
+		configuredLock: sync.Mutex{},
+		watcherDonec:   make(chan struct{}),
 	}
+
+	c.Configuration.Configurer = c
+	c.configuredCond = sync.NewCond(&c.configuredLock)
 
 	c.getConfig = c.getConfigFromFile
 	c.getEventsClient = DefaultEventsClientProvider
@@ -261,6 +270,10 @@ func (c *Configurer) Refresh(ctx context.Context) error {
 	if time.Since(c.lastRefreshed) < c.Configuration.CacheDuration {
 		return nil
 	}
+
+	c.configuredCond.L.Lock()
+	c.configured = false
+	c.configuredCond.L.Unlock()
 
 	if err := c.configure(); err != nil {
 		// ignore error if config file doesn't exist yet
@@ -282,6 +295,24 @@ func (c *Configurer) Refresh(ctx context.Context) error {
 	return nil
 }
 
+// OnRefresh executes work upon configuration refresh
+// The caller goroutine blocks until the configuration is refreshed
+func (c *Configurer) OnRefresh(work func()) {
+	c.configuredCond.L.Lock()
+	for !c.configured {
+		c.configuredCond.Wait()
+	}
+	c.configuredCond.L.Unlock()
+	log.Printf("OnRefresh work %+v", c.Configuration)
+
+	work()
+}
+
+// Configured returns a channel for whenever configuration is refreshed
+func (c *Configurer) Configured() <-chan Configuration {
+	return c.configuredc
+}
+
 // configure reads the config file and applies the configuration
 func (c *Configurer) configure() error {
 	body, err := c.getConfig()
@@ -298,20 +329,27 @@ func (c *Configurer) configure() error {
 	}
 
 	c.lastRefreshed = time.Now()
+
 	go func() {
 		c.configuredc <- *c.Configuration
 	}()
+
+	c.configuredCond.L.Lock()
+	log.Printf("broadcast %+v", c.Configuration)
+	c.configured = true
+	c.configuredCond.Broadcast()
+	c.configuredCond.L.Unlock()
 
 	return nil
 }
 
 // getConfigFromFile reads the config file
 func (c *Configurer) getConfigFromFile() ([]byte, error) {
-	if _, err := os.Stat(configPath); err != nil {
+	if _, err := os.Stat(ConfigPath); err != nil {
 		return nil, err
 	}
 
-	cfg, err := os.Open(configPath)
+	cfg, err := os.Open(ConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +391,7 @@ func (c *Configurer) watchConfigFile(ctx context.Context) error {
 					continue
 				}
 
-				if event.Name != configPath {
+				if event.Name != ConfigPath {
 					continue
 				}
 
@@ -375,7 +413,7 @@ func (c *Configurer) watchConfigFile(ctx context.Context) error {
 		}
 	}()
 
-	if err := watcher.Add(configDir); err != nil {
+	if err := watcher.Add(ConfigDir); err != nil {
 		return err
 	}
 
@@ -389,7 +427,6 @@ func (c *Configurer) setConfig(body []byte) error {
 		return err
 	}
 
-	c.Configuration.Configurer = c
 	c.Configuration.GetEventsClient = c.getEventsClient
 
 	BaseURL = c.Configuration.BaseURL

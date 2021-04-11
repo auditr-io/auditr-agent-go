@@ -385,7 +385,7 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 					}
 				],
 				"sample": [],
-				"flush": false,
+				"flush": true,
 				"cache_duration": 2,
 				"max_events_per_batch": 10,
 				"max_concurrent_batches": 10,
@@ -399,23 +399,26 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 	)
 
 	configurer.Refresh(context.Background())
+	configurer.OnRefresh(func() {})
 
 	a, err := NewAgentWithConfiguration(configurer.Configuration)
 	assert.NoError(t, err)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < expectedCalls; i++ {
+	wg.Add(expectedCalls)
+	for i := 0; i < expectedCalls; i++ {
+		go func() {
+			defer wg.Done()
+
+			// make sure to flush, else will block
 			res := <-a.Responses()
 
 			expectedResponse := collect.Response{
 				StatusCode: 200,
 			}
 			assert.Equal(t, expectedResponse, res)
-		}
-	}()
+		}()
+	}
 
 	for i := 0; i < expectedCalls; i++ {
 		a.AfterExecution(context.Background(), payload, payload, res, nil)

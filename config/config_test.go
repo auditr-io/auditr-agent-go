@@ -52,7 +52,8 @@ func TestRefresh_SetsConfiguration(t *testing.T) {
 	err = c.Refresh(ctx)
 	assert.NoError(t, err)
 
-	<-c.configuredc
+	c.OnRefresh(func() {})
+
 	assert.Equal(t, expectedConfig.BaseURL, BaseURL)
 	expectedEventsURL, err := url.Parse(expectedConfig.BaseURL)
 	assert.NoError(t, err)
@@ -70,7 +71,7 @@ func TestRefresh_SetsConfiguration(t *testing.T) {
 	assert.Equal(t, expectedConfig.BlockOnResponse, BlockOnResponse)
 }
 
-func TestRefresh_OnFreshConfig(t *testing.T) {
+func TestRefresh_HasFreshConfig(t *testing.T) {
 	configs := []struct {
 		bytes  []byte
 		config *Configuration
@@ -143,6 +144,7 @@ func TestRefresh_OnFreshConfig(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
 
@@ -153,7 +155,7 @@ func TestRefresh_OnFreshConfig(t *testing.T) {
 			if i == 0 {
 				fileEventChan <- fsnotify.Event{
 					Op:   fsnotify.Write,
-					Name: configPath,
+					Name: ConfigPath,
 				}
 			}
 		}
@@ -164,6 +166,69 @@ func TestRefresh_OnFreshConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	wg.Wait()
+}
+
+func TestOnRefresh(t *testing.T) {
+	configBytes := []byte(`{
+		"base_url": "https://dev-api.auditr.io/v1",
+		"events_path": "/events",
+		"target": [
+			{
+				"method": "GET",
+				"path": "/person/:id"
+			}
+		],
+		"sample": [],
+		"flush": false,
+		"cache_duration": 2,
+		"max_events_per_batch": 10,
+		"max_concurrent_batches": 10,
+		"pending_work_capacity": 20,
+		"send_interval": 20,
+		"block_on_send": false,
+		"block_on_response": true
+	}`)
+	var expectedConfig *Configuration
+	json.Unmarshal(configBytes, &expectedConfig)
+
+	c, err := NewConfigurer(
+		WithConfigProvider(
+			func() ([]byte, error) {
+				return configBytes, nil
+			},
+		),
+	)
+	assert.NoError(t, err)
+
+	m := mock.Mock{}
+	m.On("work").Return().Twice()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+
+		c.OnRefresh(func() {
+			m.MethodCalled("work")
+			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
+		})
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		c.OnRefresh(func() {
+			m.MethodCalled("work")
+			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
+		})
+	}()
+
+	ctx := context.Background()
+	err = c.Refresh(ctx)
+	assert.NoError(t, err)
+
+	wg.Wait()
+	m.AssertExpectations(t)
 }
 
 func TestRefresh_SkipsIfFresh(t *testing.T) {

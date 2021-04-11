@@ -66,10 +66,8 @@ type batchList struct {
 	// holds batches exceeding maxBatchSize
 	overflowBatches map[int][]*Event
 
-	responses       chan Response
-	blockOnResponse bool
-
-	client *http.Client
+	responses chan Response
+	client    *http.Client
 }
 
 // newBatchList creates a new batch list
@@ -165,7 +163,7 @@ func (b *batchList) enqueueResponseForEvents(res Response, events []*Event) {
 
 // enqueueResponse writes the response to the response channel
 func (b *batchList) enqueueResponse(res Response) {
-	if writeToChannel(b.responses, res, b.blockOnResponse) {
+	if writeToChannel(b.responses, res, b.configuration.BlockOnResponse) {
 		// no-op
 	}
 }

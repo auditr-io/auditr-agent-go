@@ -95,37 +95,40 @@ func NewEventPublisher(
 		pendingWorkCapacity:  DefaultPendingWorkCapacity,
 	}
 
-	if p.configuration.MaxEventsPerBatch > 0 {
-		p.maxEventsPerBatch = p.configuration.MaxEventsPerBatch
-		p.pendingWorkCapacity = p.configuration.MaxEventsPerBatch * PendingWorkToMaxEventsRatio
-	}
+	go p.configuration.Configurer.OnRefresh(func() {
+		if p.configuration.MaxEventsPerBatch > 0 {
+			p.maxEventsPerBatch = p.configuration.MaxEventsPerBatch
+			p.pendingWorkCapacity = p.configuration.MaxEventsPerBatch * PendingWorkToMaxEventsRatio
+		}
 
-	if p.configuration.SendInterval > 0 {
-		p.sendInterval = p.configuration.SendInterval
-	}
+		if p.configuration.SendInterval > 0 {
+			p.sendInterval = p.configuration.SendInterval
+		}
 
-	if p.configuration.MaxConcurrentBatches > 0 {
-		p.maxConcurrentBatches = p.configuration.MaxConcurrentBatches
-	}
+		if p.configuration.MaxConcurrentBatches > 0 {
+			p.maxConcurrentBatches = p.configuration.MaxConcurrentBatches
+		}
 
-	if p.configuration.PendingWorkCapacity > 0 {
-		p.pendingWorkCapacity = p.configuration.PendingWorkCapacity
-	}
+		if p.configuration.PendingWorkCapacity > 0 {
+			p.pendingWorkCapacity = p.configuration.PendingWorkCapacity
+		}
 
-	p.blockOnSend = p.configuration.BlockOnSend
-	p.blockOnResponse = p.configuration.BlockOnResponse
+		p.blockOnSend = p.configuration.BlockOnSend
+		p.blockOnResponse = p.configuration.BlockOnResponse
+	})
 
+	// todo: recreate on config refresh?
 	p.responses = make(chan Response, p.pendingWorkCapacity*2)
 
 	p.batchMaker = func() muster.Batch {
 		b := newBatchList(
 			p.configuration,
 			p.responses,
+			// capture snapshot of the values so the batch size is
+			// static once created
 			p.maxEventsPerBatch,
 			p.maxConcurrentBatches,
 		)
-		// TODO: withBlockOnResponse()
-		b.blockOnResponse = p.blockOnResponse
 		return b
 	}
 	p.muster = p.createMuster()
