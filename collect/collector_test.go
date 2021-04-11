@@ -117,6 +117,8 @@ func TestRefreshRouter(t *testing.T) {
 	err = c.Refresh(ctx)
 	assert.NoError(t, err)
 
+	cfg := <-c.Configured()
+
 	collector, err := NewCollector(
 		[]EventBuilder{},
 		c.Configuration,
@@ -130,12 +132,10 @@ func TestRefreshRouter(t *testing.T) {
 		defer wg.Done()
 
 		for i := 0; i < len(configs); i++ {
-			cfg := <-c.Configured()
 
 			if i == 0 {
 				assert.Equal(t, configs[i].config.TargetRoutes, cfg.TargetRoutes)
-
-				c.OnRefresh(func() {})
+				assert.Equal(t, 0, len(cfg.SampleRoutes))
 
 				route, err := collector.router.FindRoute(RouteTypeTarget, http.MethodGet, "/person/xyz")
 				assert.NoError(t, err)
@@ -146,9 +146,10 @@ func TestRefreshRouter(t *testing.T) {
 					Name: config.ConfigPath,
 				}
 			} else {
-				assert.Equal(t, configs[i].config.SampleRoutes, cfg.SampleRoutes)
+				cfg = <-c.Configured()
 
-				c.OnRefresh(func() {})
+				assert.Equal(t, 0, len(cfg.TargetRoutes))
+				assert.Equal(t, configs[i].config.SampleRoutes, cfg.SampleRoutes)
 
 				<-collector.routerRefreshedc
 
