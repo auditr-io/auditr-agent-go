@@ -295,6 +295,7 @@ func (c *Configurer) Refresh(ctx context.Context) error {
 func (c *Configurer) OnRefresh(listener func()) {
 	c.refreshListenersLock.Lock()
 	c.refreshListeners = append(c.refreshListeners, listener)
+	log.Printf("refreshListeners %v", c.refreshListeners)
 	c.refreshListenersLock.Unlock()
 }
 
@@ -326,6 +327,7 @@ func (c *Configurer) configure() error {
 
 	c.refreshListenersLock.RLock()
 	for _, listener := range c.refreshListeners {
+		log.Printf("listener %p", listener)
 		go listener()
 	}
 	c.refreshListenersLock.RUnlock()
