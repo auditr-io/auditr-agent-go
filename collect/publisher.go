@@ -95,7 +95,7 @@ func NewEventPublisher(
 		pendingWorkCapacity:  DefaultPendingWorkCapacity,
 	}
 
-	go p.configuration.Configurer.OnRefresh(func() {
+	p.configuration.Configurer.OnRefresh(func() {
 		if p.configuration.MaxEventsPerBatch > 0 {
 			p.maxEventsPerBatch = p.configuration.MaxEventsPerBatch
 			p.pendingWorkCapacity = p.configuration.MaxEventsPerBatch * PendingWorkToMaxEventsRatio

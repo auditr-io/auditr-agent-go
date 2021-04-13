@@ -26,7 +26,7 @@ func NewCollector(
 ) (*Collector, error) {
 	c := &Collector{
 		configuration:    configuration,
-		routerRefreshedc: make(chan struct{}, 1),
+		routerRefreshedc: make(chan struct{}),
 	}
 
 	if configuration == nil {
@@ -39,7 +39,7 @@ func NewCollector(
 		c.configuration.SampleRoutes,
 	)
 
-	go c.configuration.Configurer.OnRefresh(c.refreshRouter)
+	c.configuration.Configurer.OnRefresh(c.refreshRouter)
 
 	p, err := NewEventPublisher(
 		c.configuration,
@@ -71,7 +71,6 @@ func (c *Collector) refreshRouter() {
 	case c.routerRefreshedc <- struct{}{}:
 	default:
 	}
-
 }
 
 // Collect captures the request as an audit event or a sample

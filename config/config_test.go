@@ -168,7 +168,72 @@ func TestRefresh_HasFreshConfig(t *testing.T) {
 	wg.Wait()
 }
 
-func TestOnRefresh(t *testing.T) {
+func TestOnRefresh_ParallelRegistration(t *testing.T) {
+	configBytes := []byte(`{
+		"base_url": "https://dev-api.auditr.io/v1",
+		"events_path": "/events",
+		"target": [
+			{
+				"method": "GET",
+				"path": "/person/:id"
+			}
+		],
+		"sample": [],
+		"flush": false,
+		"cache_duration": 2,
+		"max_events_per_batch": 10,
+		"max_concurrent_batches": 10,
+		"pending_work_capacity": 20,
+		"send_interval": 20,
+		"block_on_send": false,
+		"block_on_response": true
+	}`)
+	var expectedConfig *Configuration
+	json.Unmarshal(configBytes, &expectedConfig)
+
+	c, err := NewConfigurer(
+		WithConfigProvider(
+			func() ([]byte, error) {
+				return configBytes, nil
+			},
+		),
+	)
+	assert.NoError(t, err)
+
+	m := mock.Mock{}
+	m.On("work1").Return().Once()
+	m.On("work2").Return().Once()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+
+		c.OnRefresh(func() {
+			m.MethodCalled("work1")
+			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
+		})
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		c.OnRefresh(func() {
+			m.MethodCalled("work2")
+			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
+		})
+	}()
+
+	wg.Wait()
+
+	ctx := context.Background()
+	err = c.Refresh(ctx)
+	assert.NoError(t, err)
+
+	m.AssertExpectations(t)
+}
+
+func TestOnRefresh_RefreshesAsManyTimes(t *testing.T) {
 	configBytes := []byte(`{
 		"base_url": "https://dev-api.auditr.io/v1",
 		"events_path": "/events",
@@ -203,31 +268,19 @@ func TestOnRefresh(t *testing.T) {
 	m := mock.Mock{}
 	m.On("work").Return().Twice()
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-
-		c.OnRefresh(func() {
-			m.MethodCalled("work")
-			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
-		})
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		c.OnRefresh(func() {
-			m.MethodCalled("work")
-			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
-		})
-	}()
+	c.OnRefresh(func() {
+		m.MethodCalled("work")
+		assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
+	})
 
 	ctx := context.Background()
 	err = c.Refresh(ctx)
 	assert.NoError(t, err)
 
-	wg.Wait()
+	c.lastRefreshed = time.Now().Add(-c.Configuration.CacheDuration)
+	err = c.Refresh(ctx)
+	assert.NoError(t, err)
+
 	m.AssertExpectations(t)
 }
 

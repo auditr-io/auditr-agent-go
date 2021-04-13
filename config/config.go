@@ -226,10 +226,10 @@ type Configurer struct {
 	cancelFunc    context.CancelFunc
 	lastRefreshed time.Time
 
-	configuredc    chan Configuration
-	configuredLock sync.Mutex
-	configuredCond *sync.Cond
-	configured     bool
+	configuredc chan Configuration
+
+	refreshListeners     []func()
+	refreshListenersLock sync.RWMutex
 
 	fileEventc   <-chan fsnotify.Event
 	watcherDonec chan struct{}
@@ -242,15 +242,14 @@ func NewConfigurer(options ...ConfigurerOption) (*Configurer, error) {
 	}
 
 	c := &Configurer{
-		Configuration:  configuration,
-		lastRefreshed:  time.Now().Add(-configuration.CacheDuration),
-		configuredc:    make(chan Configuration),
-		configuredLock: sync.Mutex{},
-		watcherDonec:   make(chan struct{}),
+		Configuration:    configuration,
+		lastRefreshed:    time.Now().Add(-configuration.CacheDuration),
+		configuredc:      make(chan Configuration),
+		watcherDonec:     make(chan struct{}),
+		refreshListeners: []func(){},
 	}
 
 	c.Configuration.Configurer = c
-	c.configuredCond = sync.NewCond(&c.configuredLock)
 
 	c.getConfig = c.getConfigFromFile
 	c.getEventsClient = DefaultEventsClientProvider
@@ -270,10 +269,6 @@ func (c *Configurer) Refresh(ctx context.Context) error {
 	if time.Since(c.lastRefreshed) < c.Configuration.CacheDuration {
 		return nil
 	}
-
-	c.configuredCond.L.Lock()
-	c.configured = false
-	c.configuredCond.L.Unlock()
 
 	if err := c.configure(); err != nil {
 		// ignore error if config file doesn't exist yet
@@ -297,15 +292,10 @@ func (c *Configurer) Refresh(ctx context.Context) error {
 
 // OnRefresh executes work upon configuration refresh
 // The caller goroutine blocks until the configuration is refreshed
-func (c *Configurer) OnRefresh(work func()) {
-	c.configuredCond.L.Lock()
-	for !c.configured {
-		c.configuredCond.Wait()
-	}
-	c.configuredCond.L.Unlock()
-	log.Printf("OnRefresh work %+v", c.Configuration)
-
-	work()
+func (c *Configurer) OnRefresh(listener func()) {
+	c.refreshListenersLock.Lock()
+	c.refreshListeners = append(c.refreshListeners, listener)
+	c.refreshListenersLock.Unlock()
 }
 
 // Configured returns a channel for whenever configuration is refreshed
@@ -334,11 +324,11 @@ func (c *Configurer) configure() error {
 		c.configuredc <- *c.Configuration
 	}()
 
-	c.configuredCond.L.Lock()
-	log.Printf("broadcast %+v", c.Configuration)
-	c.configured = true
-	c.configuredCond.Broadcast()
-	c.configuredCond.L.Unlock()
+	c.refreshListenersLock.RLock()
+	for _, listener := range c.refreshListeners {
+		go listener()
+	}
+	c.refreshListenersLock.RUnlock()
 
 	return nil
 }
