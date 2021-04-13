@@ -204,13 +204,16 @@ func TestOnRefresh_ParallelRegistration(t *testing.T) {
 	m.On("work1").Return().Once()
 	m.On("work2").Return().Once()
 
+	expectedCalls := 2
+	callStack := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(expectedCalls)
 	go func() {
 		defer wg.Done()
 
 		c.OnRefresh(func() {
 			m.MethodCalled("work1")
+			callStack <- struct{}{}
 			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
 		})
 	}()
@@ -220,6 +223,7 @@ func TestOnRefresh_ParallelRegistration(t *testing.T) {
 
 		c.OnRefresh(func() {
 			m.MethodCalled("work2")
+			callStack <- struct{}{}
 			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
 		})
 	}()
@@ -231,6 +235,9 @@ func TestOnRefresh_ParallelRegistration(t *testing.T) {
 	assert.NoError(t, err)
 
 	<-c.Configured()
+	for i := 0; i < expectedCalls; i++ {
+		<-callStack
+	}
 
 	m.AssertExpectations(t)
 }
