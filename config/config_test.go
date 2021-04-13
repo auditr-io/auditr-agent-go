@@ -230,6 +230,8 @@ func TestOnRefresh_ParallelRegistration(t *testing.T) {
 	err = c.Refresh(ctx)
 	assert.NoError(t, err)
 
+	<-c.Configured()
+
 	m.AssertExpectations(t)
 }
 
@@ -277,9 +279,13 @@ func TestOnRefresh_RefreshesAsManyTimes(t *testing.T) {
 	err = c.Refresh(ctx)
 	assert.NoError(t, err)
 
+	<-c.Configured()
+
 	c.lastRefreshed = time.Now().Add(-c.Configuration.CacheDuration)
 	err = c.Refresh(ctx)
 	assert.NoError(t, err)
+
+	<-c.Configured()
 
 	m.AssertExpectations(t)
 }
