@@ -67,7 +67,11 @@ func (c *Collector) refreshRouter() {
 	c.router = r
 	c.routerLock.Unlock()
 
-	c.routerRefreshedc <- struct{}{}
+	select {
+	case c.routerRefreshedc <- struct{}{}:
+	default:
+	}
+
 }
 
 // Collect captures the request as an audit event or a sample
