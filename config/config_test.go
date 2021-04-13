@@ -274,11 +274,14 @@ func TestOnRefresh_RefreshesAsManyTimes(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
+	expectedCalls := 2
+	callStack := make(chan struct{})
 	m := mock.Mock{}
-	m.On("work").Return().Twice()
+	m.On("work").Return().Times(expectedCalls)
 
 	c.OnRefresh(func() {
 		m.MethodCalled("work")
+		callStack <- struct{}{}
 		assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
 	})
 
@@ -293,6 +296,9 @@ func TestOnRefresh_RefreshesAsManyTimes(t *testing.T) {
 	assert.NoError(t, err)
 
 	<-c.Configured()
+	for i := 0; i < expectedCalls; i++ {
+		<-callStack
+	}
 
 	m.AssertExpectations(t)
 }
