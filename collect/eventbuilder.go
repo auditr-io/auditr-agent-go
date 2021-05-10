@@ -15,5 +15,5 @@ type EventBuilder interface {
 		request interface{},
 		response json.RawMessage,
 		errorValue json.RawMessage,
-	) (*Event, error)
+	) (*EventRaw, error)
 }

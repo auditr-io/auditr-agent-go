@@ -49,11 +49,11 @@ func TestAudit(t *testing.T) {
 			reqBody, err := ioutil.ReadAll(req.Body)
 			assert.NoError(t, err)
 
-			var eventBatch []*collect.Event
+			var eventBatch []*collect.EventRaw
 			err = json.Unmarshal(reqBody, &eventBatch)
 			assert.NoError(t, err)
 			event := eventBatch[0]
-			assert.Equal(t, collect.RouteTypeTarget, event.RouteType)
+			assert.Equal(t, collect.RouteTypeTarget, event.Route.Type)
 
 			r := ioutil.NopCloser(bytes.NewBuffer([]byte(`[
 				{

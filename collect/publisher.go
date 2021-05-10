@@ -153,7 +153,7 @@ func (p *EventPublisher) createMuster() *muster.Client {
 
 // Add adds an event to the publish queue.
 // Returns true if event was added, false otherwise due to a full queue.
-func (p *EventPublisher) Add(event *Event) {
+func (p *EventPublisher) Add(event *EventRaw) {
 	p.musterLock.RLock()
 	defer p.musterLock.RUnlock()
 
@@ -186,7 +186,7 @@ func (p *EventPublisher) Publish(
 	response json.RawMessage,
 	errorValue json.RawMessage,
 ) {
-	var event *Event
+	var event *EventRaw
 	var err error
 	for _, b := range p.eventBuilders {
 		event, err = b.Build(

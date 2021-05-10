@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,7 +27,7 @@ type mockBuilder struct {
 		request interface{},
 		response json.RawMessage,
 		errorValue json.RawMessage,
-	) (*Event, error)
+	) (*EventRaw, error)
 }
 
 func (m *mockBuilder) Build(
@@ -37,7 +36,7 @@ func (m *mockBuilder) Build(
 	request interface{},
 	response json.RawMessage,
 	errorValue json.RawMessage,
-) (*Event, error) {
+) (*EventRaw, error) {
 	return m.fn(m, routeType, route, request, response, errorValue)
 }
 
@@ -66,23 +65,28 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		Error string
 	}
 
-	expectedEvent := &Event{
-		Action:     expectedRequest.HTTPMethod,
-		Location:   expectedRequest.RequestContext.Identity.SourceIP,
-		RequestID:  expectedRequest.RequestContext.RequestID,
-		RouteType:  RouteTypeTarget,
-		HTTPMethod: expectedRequest.HTTPMethod,
-		RoutePath:  "/person/:id",
-		Request:    expectedRequest,
-		Response:   events.APIGatewayProxyResponse{},
+	expectedEvent := &EventRaw{
+		// Action:     expectedRequest.HTTPMethod,
+		// Location:   expectedRequest.RequestContext.Identity.SourceIP,
+		// RequestID:  expectedRequest.RequestContext.RequestID,
+		// RouteType:  RouteTypeTarget,
+		// HTTPMethod: expectedRequest.HTTPMethod,
+		// RoutePath:  "/person/:id",
+		Route: &EventRoute{
+			Type:   RouteTypeTarget,
+			Method: expectedRequest.HTTPMethod,
+			Path:   "/person/:id",
+		},
+		Request:  expectedRequest,
+		Response: events.APIGatewayProxyResponse{},
 		Error: errorMessage{
 			Error: "test error",
 		},
 	}
 
 	expectedRoute := &config.Route{
-		HTTPMethod: expectedEvent.HTTPMethod,
-		Path:       expectedEvent.RoutePath,
+		HTTPMethod: expectedEvent.Route.Method,
+		Path:       expectedEvent.Route.Path,
 	}
 
 	gwRes, _ := json.Marshal(expectedEvent.Response.(events.APIGatewayProxyResponse))
@@ -95,16 +99,16 @@ func TestPublish_PublishesEvent(t *testing.T) {
 			reqBody, err := ioutil.ReadAll(req.Body)
 			assert.NoError(t, err)
 
-			var eventBatch []*Event
+			var eventBatch []*EventRaw
 			err = json.Unmarshal(reqBody, &eventBatch)
 			assert.NoError(t, err)
 			event := eventBatch[0]
-			assert.True(t, strings.HasPrefix(event.ID, "evt_"))
-			assert.Equal(t, expectedEvent.Action, event.Action)
-			assert.Equal(t, expectedEvent.Location, event.Location)
-			assert.Equal(t, expectedEvent.RequestID, event.RequestID)
+			// assert.True(t, strings.HasPrefix(event.ID, "evt_"))
+			// assert.Equal(t, expectedEvent.Action, event.Action)
+			// assert.Equal(t, expectedEvent.Location, event.Location)
+			// assert.Equal(t, expectedEvent.RequestID, event.RequestID)
 			assert.GreaterOrEqual(t, time.Now().UTC().Unix(), event.RequestedAt)
-			assert.Equal(t, expectedEvent.RouteType, event.RouteType)
+			assert.Equal(t, expectedEvent.Route.Type, event.Route.Type)
 			var eventReq events.APIGatewayProxyRequest
 			mapstructure.Decode(event.Request, &eventReq)
 			assert.Equal(t, expectedEvent.Request, eventReq)
@@ -173,7 +177,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 			request interface{},
 			response json.RawMessage,
 			errorValue json.RawMessage,
-		) (*Event, error) {
+		) (*EventRaw, error) {
 			m.MethodCalled(
 				"Build",
 				routeType,
@@ -184,7 +188,6 @@ func TestPublish_PublishesEvent(t *testing.T) {
 			)
 
 			e := expectedEvent
-			e.ID = "evt_xxxxx"
 
 			return e, nil
 		},
@@ -192,7 +195,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 
 	b.On(
 		"Build",
-		expectedEvent.RouteType,
+		expectedEvent.Route.Type,
 		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
 		gwRes,
@@ -214,7 +217,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 	}()
 
 	p.Publish(
-		expectedEvent.RouteType,
+		expectedEvent.Route.Type,
 		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
 		gwRes,
@@ -248,23 +251,28 @@ func TestFlush_PublishesEvent(t *testing.T) {
 		Error string
 	}
 
-	expectedEvent := &Event{
-		Action:     expectedRequest.HTTPMethod,
-		Location:   expectedRequest.RequestContext.Identity.SourceIP,
-		RequestID:  expectedRequest.RequestContext.RequestID,
-		RouteType:  RouteTypeTarget,
-		HTTPMethod: expectedRequest.HTTPMethod,
-		RoutePath:  "/person/:id",
-		Request:    expectedRequest,
-		Response:   events.APIGatewayProxyResponse{},
+	expectedEvent := &EventRaw{
+		// Action:     expectedRequest.HTTPMethod,
+		// Location:   expectedRequest.RequestContext.Identity.SourceIP,
+		// RequestID:  expectedRequest.RequestContext.RequestID,
+		// RouteType:  RouteTypeTarget,
+		// HTTPMethod: expectedRequest.HTTPMethod,
+		// RoutePath:  "/person/:id",
+		Route: &EventRoute{
+			Type:   RouteTypeTarget,
+			Method: expectedRequest.HTTPMethod,
+			Path:   "/person/:id",
+		},
+		Request:  expectedRequest,
+		Response: events.APIGatewayProxyResponse{},
 		Error: errorMessage{
 			Error: "test error",
 		},
 	}
 
 	expectedRoute := &config.Route{
-		HTTPMethod: expectedEvent.HTTPMethod,
-		Path:       expectedEvent.RoutePath,
+		HTTPMethod: expectedEvent.Route.Method,
+		Path:       expectedEvent.Route.Path,
 	}
 
 	gwRes, _ := json.Marshal(expectedEvent.Response.(events.APIGatewayProxyResponse))
@@ -277,16 +285,16 @@ func TestFlush_PublishesEvent(t *testing.T) {
 			reqBody, err := ioutil.ReadAll(req.Body)
 			assert.NoError(t, err)
 
-			var eventBatch []*Event
+			var eventBatch []*EventRaw
 			err = json.Unmarshal(reqBody, &eventBatch)
 			assert.NoError(t, err)
 			event := eventBatch[0]
-			assert.True(t, strings.HasPrefix(event.ID, "evt_"))
-			assert.Equal(t, expectedEvent.Action, event.Action)
-			assert.Equal(t, expectedEvent.Location, event.Location)
-			assert.Equal(t, expectedEvent.RequestID, event.RequestID)
+			// assert.True(t, strings.HasPrefix(event.ID, "evt_"))
+			// assert.Equal(t, expectedEvent.Action, event.Action)
+			// assert.Equal(t, expectedEvent.Location, event.Location)
+			// assert.Equal(t, expectedEvent.RequestID, event.RequestID)
 			assert.GreaterOrEqual(t, time.Now().UTC().Unix(), event.RequestedAt)
-			assert.Equal(t, expectedEvent.RouteType, event.RouteType)
+			assert.Equal(t, expectedEvent.Route.Type, event.Route.Type)
 			var eventReq events.APIGatewayProxyRequest
 			mapstructure.Decode(event.Request, &eventReq)
 			assert.Equal(t, expectedEvent.Request, eventReq)
@@ -355,7 +363,7 @@ func TestFlush_PublishesEvent(t *testing.T) {
 			request interface{},
 			response json.RawMessage,
 			errorValue json.RawMessage,
-		) (*Event, error) {
+		) (*EventRaw, error) {
 			m.MethodCalled(
 				"Build",
 				routeType,
@@ -366,7 +374,6 @@ func TestFlush_PublishesEvent(t *testing.T) {
 			)
 
 			e := expectedEvent
-			e.ID = "evt_xxxxx"
 
 			return e, nil
 		},
@@ -374,7 +381,7 @@ func TestFlush_PublishesEvent(t *testing.T) {
 
 	b.On(
 		"Build",
-		expectedEvent.RouteType,
+		expectedEvent.Route.Type,
 		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
 		gwRes,
@@ -388,7 +395,7 @@ func TestFlush_PublishesEvent(t *testing.T) {
 	assert.NoError(t, err)
 
 	p.Publish(
-		expectedEvent.RouteType,
+		expectedEvent.Route.Type,
 		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
 		gwRes,

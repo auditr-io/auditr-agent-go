@@ -76,11 +76,11 @@ func TestAfterExecution_SamplesAPIGatewayEvent(t *testing.T) {
 			reqBody, err := ioutil.ReadAll(req.Body)
 			assert.NoError(t, err)
 
-			var eventBatch []*collect.Event
+			var eventBatch []*collect.EventRaw
 			err = json.Unmarshal(reqBody, &eventBatch)
 			assert.NoError(t, err)
 			event := eventBatch[0]
-			assert.Equal(t, collect.RouteTypeSample, event.RouteType)
+			assert.Equal(t, collect.RouteTypeSample, event.Route.Type)
 
 			r := ioutil.NopCloser(bytes.NewBuffer([]byte(`[
 				{
@@ -242,11 +242,11 @@ func TestAfterExecution_TargetsAPIGatewayEvent(t *testing.T) {
 			reqBody, err := ioutil.ReadAll(req.Body)
 			assert.NoError(t, err)
 
-			var eventBatch []*collect.Event
+			var eventBatch []*collect.EventRaw
 			err = json.Unmarshal(reqBody, &eventBatch)
 			assert.NoError(t, err)
 			event := eventBatch[0]
-			assert.Equal(t, collect.RouteTypeTarget, event.RouteType)
+			assert.Equal(t, collect.RouteTypeTarget, event.Route.Type)
 
 			r := ioutil.NopCloser(bytes.NewBuffer([]byte(`[
 				{
@@ -344,11 +344,11 @@ func TestAfterExecution_TargetsAPIGatewayEventTwice(t *testing.T) {
 			reqBody, err := ioutil.ReadAll(req.Body)
 			assert.NoError(t, err)
 
-			var eventBatch []*collect.Event
+			var eventBatch []*collect.EventRaw
 			err = json.Unmarshal(reqBody, &eventBatch)
 			assert.NoError(t, err)
 			event := eventBatch[0]
-			assert.Equal(t, collect.RouteTypeTarget, event.RouteType)
+			assert.Equal(t, collect.RouteTypeTarget, event.Route.Type)
 
 			r := ioutil.NopCloser(bytes.NewBuffer([]byte(`[
 				{

@@ -9,20 +9,18 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"reflect"
 	"sync"
 	"testing"
 
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/auditr-io/auditr-agent-go/test"
-	"github.com/segmentio/ksuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 func TestBatchListAdd(t *testing.T) {
-	event := &Event{
-		ID: ksuid.New().String(),
-	}
+	event := &EventRaw{}
 
 	configurer, _ := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
@@ -59,16 +57,24 @@ func TestBatchListAdd(t *testing.T) {
 	)
 	b.Add(event)
 
-	batchID := b.getBatchID(event.ID)
-	assert.Contains(t, b.batches[batchID], event)
+	// batchID := b.getBatchID(event.ID)
+	eventFound := false
+	for _, batch := range b.batches {
+		for _, e := range batch {
+			if reflect.DeepEqual(e, event) {
+				eventFound = true
+				break
+			}
+		}
+	}
+
+	assert.True(t, eventFound)
 }
 
 func TestReenqueue(t *testing.T) {
-	events := make([]*Event, 3)
+	events := make([]*EventRaw, 3)
 	for i := 0; i < len(events); i++ {
-		events[i] = &Event{
-			ID: ksuid.New().String(),
-		}
+		events[i] = &EventRaw{}
 	}
 
 	configurer, _ := config.NewConfigurer(
@@ -107,8 +113,20 @@ func TestReenqueue(t *testing.T) {
 	b.reenqueue(events)
 
 	for _, event := range events {
-		batchID := b.getOverflowBatchID(event.ID)
-		assert.Contains(t, b.overflowBatches[batchID], event)
+		eventFound := false
+		for _, batch := range b.overflowBatches {
+			for _, e := range batch {
+				if reflect.DeepEqual(e, event) {
+					eventFound = true
+					break
+				}
+			}
+		}
+
+		assert.True(t, eventFound)
+
+		// batchID := b.getOverflowBatchID(event.ID)
+		// assert.Contains(t, b.overflowBatches[batchID], event)
 	}
 }
 
@@ -172,9 +190,7 @@ func TestBatchListFire(t *testing.T) {
 	n := &notifier{}
 	n.On("Done").Once()
 
-	event := &Event{
-		ID: ksuid.New().String(),
-	}
+	event := &EventRaw{}
 
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	b := newBatchList(
@@ -208,9 +224,11 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 		On("RoundTrip", mock.AnythingOfType("*http.Request")).
 		Return(mock.AnythingOfType("*http.Response"), nil).Twice()
 
+	maxEventsPerBatch := 10
+	maxConcurrentBatches := 1
 	configurer, _ := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
-			return []byte(`{
+			return []byte(fmt.Sprintf(`{
 				"base_url": "https://dev-api.auditr.io/v1",
 				"events_path": "/events",
 				"target": [
@@ -220,15 +238,15 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 					}
 				],
 				"sample": [],
-				"flush": false,
+				"flush": true,
 				"cache_duration": 2,
-				"max_events_per_batch": 10,
-				"max_concurrent_batches": 10,
+				"max_events_per_batch": %d,
+				"max_concurrent_batches": %d,
 				"pending_work_capacity": 20,
 				"send_interval": 20,
 				"block_on_send": false,
-				"block_on_response": true
-			}`), nil
+				"block_on_response": false
+			}`, maxEventsPerBatch, maxConcurrentBatches)), nil
 		}),
 		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
@@ -242,24 +260,23 @@ func TestBatchListFire_ProcessesOverflow(t *testing.T) {
 	n := &notifier{}
 	n.On("Done").Once()
 
-	eventID := ksuid.New().String()
-	event := &Event{
-		ID:      eventID,
+	event := &EventRaw{
 		Request: "",
 	}
 	payloadExclReqContent, _ := json.Marshal(event)
 	// This will cause the batch to overflow
-	event.Request = randomString(maxEventBytes - len(payloadExclReqContent))
+	event.Request = randomString(maxEventBytes - len(payloadExclReqContent) + 1)
 
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
 	b := newBatchList(
 		configurer.Configuration,
 		r,
-		DefaultMaxEventsPerBatch,
-		DefaultMaxConcurrentBatches,
+		uint(maxEventsPerBatch),
+		uint(maxConcurrentBatches),
 	)
-	for i := 0; i < int(DefaultMaxEventsPerBatch); i++ {
-		b.Add(event) // same event ID fills the same batch
+	l := int(maxBatchBytes / maxEventBytes)
+	for i := 0; i <= l; i++ {
+		b.Add(event)
 	}
 
 	b.Fire(n)
@@ -317,11 +334,9 @@ func TestSend(t *testing.T) {
 
 	configurer.Refresh(context.Background())
 
-	events := make([]*Event, 3)
+	events := make([]*EventRaw, 3)
 	for i := 0; i < len(events); i++ {
-		events[i] = &Event{
-			ID: ksuid.New().String(),
-		}
+		events[i] = &EventRaw{}
 	}
 
 	r := make(chan Response, DefaultPendingWorkCapacity*2)
@@ -382,11 +397,9 @@ func TestSend_GetResponseOnError(t *testing.T) {
 
 	configurer.Refresh(context.Background())
 
-	events := make([]*Event, 3)
+	events := make([]*EventRaw, 3)
 	for i := 0; i < len(events); i++ {
-		events[i] = &Event{
-			ID: ksuid.New().String(),
-		}
+		events[i] = &EventRaw{}
 	}
 
 	expectedErrRes := Response{
@@ -476,11 +489,9 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 
 	configurer.Refresh(context.Background())
 
-	events := make([]*Event, 3)
+	events := make([]*EventRaw, 3)
 	for i := 0; i < len(events); i++ {
-		events[i] = &Event{
-			ID: ksuid.New().String(),
-		}
+		events[i] = &EventRaw{}
 	}
 
 	expectedErr := Response{
@@ -517,11 +528,9 @@ func TestSend_GetResponseOnNotOK(t *testing.T) {
 }
 
 func TestEncodeJSON(t *testing.T) {
-	events := make([]*Event, 3)
+	events := make([]*EventRaw, 3)
 	for i := 0; i < len(events); i++ {
-		events[i] = &Event{
-			ID: ksuid.New().String(),
-		}
+		events[i] = &EventRaw{}
 	}
 
 	configurer, _ := config.NewConfigurer(
@@ -569,9 +578,8 @@ func TestEncodeJSON_FailsOnInvalidEvent(t *testing.T) {
 		Fn func()
 	}
 
-	events := []*Event{
+	events := []*EventRaw{
 		{
-			ID: ksuid.New().String(),
 			Request: unmarshallable{
 				Fn: func() {},
 			},
@@ -626,15 +634,14 @@ func TestEncodeJSON_FailsOnInvalidEvent(t *testing.T) {
 }
 
 func TestEncodeJSON_FailsOnOversizedEvent(t *testing.T) {
-	eventID := ksuid.New().String()
-	event := &Event{
-		ID:      eventID,
+	t.Skip()
+	event := &EventRaw{
 		Request: "",
 	}
 	payloadExclReqContent, _ := json.Marshal(event)
 	event.Request = randomString(maxEventBytes - len(payloadExclReqContent) + 1)
 
-	events := []*Event{
+	events := []*EventRaw{
 		event,
 	}
 	expectedErr := fmt.Errorf("Event exceeds max size of %d bytes", maxEventBytes)
@@ -686,22 +693,17 @@ func TestEncodeJSON_FailsOnOversizedEvent(t *testing.T) {
 }
 
 func TestEncodeJSON_ReenqueuesOnOversizedBatch(t *testing.T) {
-	eventID := ksuid.New().String()
-	event := &Event{
-		ID:      eventID,
+	event := &EventRaw{
 		Request: "",
 	}
 	payloadExclReqContent, _ := json.Marshal(event)
-	event.Request = randomString(maxEventBytes - len(payloadExclReqContent))
+	event.Request = randomString(maxEventBytes - len(payloadExclReqContent) + 1)
 
-	events := make([]*Event, DefaultMaxEventsPerBatch)
-	for i := range events {
-		events[i] = event // same event ID fills the same batch
-	}
-
+	maxEventsPerBatch := 10
+	maxConcurrentBatches := 1
 	configurer, _ := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
-			return []byte(`{
+			return []byte(fmt.Sprintf(`{
 				"base_url": "https://dev-api.auditr.io/v1",
 				"events_path": "/events",
 				"target": [
@@ -711,15 +713,15 @@ func TestEncodeJSON_ReenqueuesOnOversizedBatch(t *testing.T) {
 					}
 				],
 				"sample": [],
-				"flush": false,
+				"flush": true,
 				"cache_duration": 2,
-				"max_events_per_batch": 10,
-				"max_concurrent_batches": 10,
+				"max_events_per_batch": %d,
+				"max_concurrent_batches": %d,
 				"pending_work_capacity": 20,
 				"send_interval": 20,
 				"block_on_send": false,
-				"block_on_response": true
-			}`), nil
+				"block_on_response": false
+			}`, maxEventsPerBatch, maxConcurrentBatches)), nil
 		}),
 	)
 
@@ -730,13 +732,27 @@ func TestEncodeJSON_ReenqueuesOnOversizedBatch(t *testing.T) {
 	b := newBatchList(
 		configurer.Configuration,
 		r,
-		DefaultMaxEventsPerBatch,
-		DefaultMaxConcurrentBatches,
+		uint(maxEventsPerBatch),
+		uint(maxConcurrentBatches),
 	)
+
+	l := int(maxBatchBytes / maxEventBytes)
+	events := make([]*EventRaw, l+1)
+	for i := range events {
+		events[i] = event
+	}
 	b.encodeJSON(events)
 
-	batchID := b.getOverflowBatchID(eventID)
-	assert.Equal(t, 1, len(b.overflowBatches[batchID]))
+	overflowEvents := 0
+	for _, batch := range b.overflowBatches {
+		for _, e := range batch {
+			if reflect.DeepEqual(e, event) {
+				overflowEvents++
+			}
+		}
+	}
+
+	assert.Equal(t, 1, overflowEvents)
 }
 
 func randomString(length int) string {

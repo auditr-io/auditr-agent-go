@@ -8,16 +8,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/auditr-io/auditr-agent-go/config"
 	"github.com/facebookgo/muster"
-	"github.com/hashicorp/terraform/helper/hashcode"
 )
 
 const (
 	// max bytes allowed per event
 	maxEventBytes int = 25000 // 25kb
+
+	// max bytes allowed per batch
+	maxBatchBytes int = 5000000 - 2 - 199 // 5MB
 
 	// number of batches to hold events exceeding maxBatchBytes
 	// Overflow exceeding this will not be processed.
@@ -58,13 +62,13 @@ type batchList struct {
 	maxConcurrentBatches uint
 
 	// max bytes allowed per batch
-	maxBatchBytes int
+	// maxBatchBytes int
 
 	// batches of events
-	batches map[int][]*Event
+	batches map[int][]*EventRaw
 
 	// holds batches exceeding maxBatchSize
-	overflowBatches map[int][]*Event
+	overflowBatches map[int][]*EventRaw
 
 	responses chan Response
 	client    *http.Client
@@ -80,21 +84,25 @@ func newBatchList(
 	b := &batchList{
 		configuration:        configuration,
 		client:               configuration.GetEventsClient(),
-		batches:              map[int][]*Event{},
-		overflowBatches:      map[int][]*Event{},
+		batches:              map[int][]*EventRaw{},
+		overflowBatches:      map[int][]*EventRaw{},
 		responses:            responses,
 		maxEventsPerBatch:    maxEventsPerBatch,
 		maxConcurrentBatches: maxConcurrentBatches,
-		maxBatchBytes:        int(maxEventsPerBatch) * maxEventBytes,
 	}
+
+	// b.maxBatchBytes = int(maxEventsPerBatch) * maxEventBytes
+	// if b.maxBatchBytes < maxEventBytes+2 {
+	// 	b.maxBatchBytes = maxEventBytes + 2
+	// }
 
 	return b
 }
 
 // Add adds an event to a batch
 func (b *batchList) Add(event interface{}) {
-	e := event.(*Event)
-	batchID := b.getBatchID(e.ID)
+	e := event.(*EventRaw)
+	batchID := b.getBatchID()
 	b.batches[batchID] = append(b.batches[batchID], e)
 }
 
@@ -141,19 +149,23 @@ func (b *batchList) Fire(notifier muster.Notifier) {
 }
 
 // getBatchID determines the batchID given an item ID
-func (b *batchList) getBatchID(id string) int {
-	h := hashcode.String(id)
-	return h % int(b.maxConcurrentBatches)
+func (b *batchList) getBatchID() int {
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	h := r.Intn(int(b.maxConcurrentBatches))
+	return h
 }
 
 // getOverflowBatchID determines the batchID given an item ID
-func (b *batchList) getOverflowBatchID(id string) int {
-	h := hashcode.String(id)
-	return h % int(maxOverflowBatches)
+func (b *batchList) getOverflowBatchID() int {
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	h := r.Intn(int(maxOverflowBatches))
+	return h
 }
 
 // enqueueResponseForEvents enqueues a response for each event in the event list
-func (b *batchList) enqueueResponseForEvents(res Response, events []*Event) {
+func (b *batchList) enqueueResponseForEvents(res Response, events []*EventRaw) {
 	for _, event := range events {
 		if event != nil {
 			b.enqueueResponse(res)
@@ -188,9 +200,9 @@ func writeToChannel(responses chan Response, res Response, block bool) bool {
 }
 
 // reenqueue reenqueues events for processing
-func (b *batchList) reenqueue(events []*Event) {
+func (b *batchList) reenqueue(events []*EventRaw) {
 	for _, e := range events {
-		batchID := b.getOverflowBatchID(e.ID)
+		batchID := b.getOverflowBatchID()
 		b.overflowBatches[batchID] = append(b.overflowBatches[batchID], e)
 	}
 }
@@ -200,7 +212,7 @@ type httpError interface {
 }
 
 // send sends a batch of events to the target URL
-func (b *batchList) send(events []*Event) {
+func (b *batchList) send(events []*EventRaw) {
 	if len(events) == 0 {
 		// should never happen, but just in case
 		return
@@ -302,7 +314,7 @@ func (b *batchList) send(events []*Event) {
 }
 
 // encodeJSON encodes a batch of events to JSON
-func (b *batchList) encodeJSON(events []*Event) ([]byte, int) {
+func (b *batchList) encodeJSON(events []*EventRaw) ([]byte, int) {
 	buf := bytes.Buffer{}
 	buf.WriteByte('[')
 	numEncoded := 0
@@ -327,8 +339,8 @@ func (b *batchList) encodeJSON(events []*Event) ([]byte, int) {
 			events[i] = nil
 			continue
 		}
-
-		if buf.Len()+len(payload)+1 > b.maxBatchBytes {
+		numBytes := buf.Len() + len(payload) + 1
+		if numBytes > maxBatchBytes {
 			b.reenqueue(events[i:])
 			break
 		}
