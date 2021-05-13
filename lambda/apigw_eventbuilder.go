@@ -72,17 +72,12 @@ func (b *APIGatewayEventBuilder) Build(
 	return event, nil
 }
 
+// mapOrgID maps the configured orgIDField to org ID
 func (b *APIGatewayEventBuilder) mapOrgID(
 	rootOrgID string,
 	orgIDField string,
 	req *events.APIGatewayProxyRequest,
 ) (string, error) {
-
-	// Map identity
-	// https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging-variables.html
-	// identity := req.RequestContext.Identity
-	// authorizer := req.RequestContext.Authorizer
-
 	// todo: extract orgID from request based on mapping
 	// eg. from jwt, header, field in body
 	// Default org ID to root org ID
@@ -143,6 +138,7 @@ func (b *APIGatewayEventBuilder) mapOrgID(
 	return orgID, nil
 }
 
+// mapUser maps user related fields to user
 func (b *APIGatewayEventBuilder) mapUser(
 	req *events.APIGatewayProxyRequest,
 ) (*collect.EventUser, error) {
