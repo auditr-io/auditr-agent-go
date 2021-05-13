@@ -23,10 +23,10 @@ package collect
 // A raw audit event is a set of minimal fields required for an audit event.
 // The event will later be enriched based on these fields.
 type EventRaw struct {
-	Organization *EventOrganization `json:"organization,omitempty"`
+	Organization *EventOrganization `json:"organization"`
 	Agent        *EventAgent        `json:"agent,omitempty"`
 	Route        *EventRoute        `json:"route"`
-	User         *EventUser         `json:"user"`
+	User         *EventUser         `json:"user,omitempty"`
 	Client       *EventClient       `json:"client"`
 	RequestedAt  int64              `json:"requested_at"`
 	Request      interface{}        `json:"request"`
@@ -56,7 +56,7 @@ type EventRoute struct {
 // EventOrganization is the organization of the client
 // https://github.com/elastic/ecs/blob/1.9/code/go/ecs/organization.go
 type EventOrganization struct {
-	ID   string `json:"id,omitempty"`
+	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
 }
 

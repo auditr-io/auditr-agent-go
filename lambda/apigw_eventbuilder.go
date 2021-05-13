@@ -3,6 +3,7 @@ package lambda
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/auditr-io/auditr-agent-go/collect"
@@ -15,6 +16,8 @@ type APIGatewayEventBuilder struct{}
 
 // Build builds an event from APIGateway request and response
 func (b *APIGatewayEventBuilder) Build(
+	rootOrgID string,
+	orgIDField string,
 	routeType collect.RouteType,
 	route *config.Route,
 	request interface{},
@@ -26,14 +29,127 @@ func (b *APIGatewayEventBuilder) Build(
 		return nil, fmt.Errorf("request is not of type APIGatewayProxyRequest")
 	}
 
+	orgID, err := b.mapOrgID(rootOrgID, orgIDField, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := b.mapUser(&req)
+	if err != nil {
+		return nil, err
+	}
+
+	identity := req.RequestContext.Identity
+
+	event := &collect.EventRaw{
+		Organization: &collect.EventOrganization{
+			ID: orgID,
+		},
+
+		Route: &collect.EventRoute{
+			Type:   routeType,
+			Method: route.HTTPMethod,
+			Path:   route.Path,
+		},
+
+		User: user,
+
+		Client: &collect.EventClient{
+			Address: identity.SourceIP,
+		},
+
+		RequestedAt: time.Now().UnixNano() / int64(time.Millisecond),
+
+		Request:  req,
+		Response: response,
+		Error:    errorValue,
+	}
+
+	if req.RequestContext.RequestTimeEpoch > 0 {
+		event.RequestedAt = req.RequestContext.RequestTimeEpoch
+	}
+
+	return event, nil
+}
+
+func (b *APIGatewayEventBuilder) mapOrgID(
+	rootOrgID string,
+	orgIDField string,
+	req *events.APIGatewayProxyRequest,
+) (string, error) {
+
+	// Map identity
+	// https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging-variables.html
+	// identity := req.RequestContext.Identity
+	// authorizer := req.RequestContext.Authorizer
+
+	// todo: extract orgID from request based on mapping
+	// eg. from jwt, header, field in body
+	// Default org ID to root org ID
+	orgID := rootOrgID
+	if orgIDField == "" {
+		return orgID, nil
+	}
+
+	fieldParts := strings.Split(orgIDField, ".")
+	if len(fieldParts) < 3 {
+		return "", fmt.Errorf("invalid org ID field %s", orgIDField)
+	}
+
+	// the first field part is always "request"
+	switch fieldParts[1] {
+	case "header":
+		val, ok := req.Headers[fieldParts[2]]
+		if !ok {
+			return "", fmt.Errorf("org ID field %s not found", orgIDField)
+		}
+		orgID = val
+		if len(fieldParts) == 5 {
+			if fieldParts[3] == "jwt" {
+				// decode jwt and set org id
+			}
+		}
+	case "querystring":
+		val, ok := req.QueryStringParameters[fieldParts[2]]
+		if !ok {
+			return "", fmt.Errorf("org ID field %s not found", orgIDField)
+		}
+		orgID = val
+		if len(fieldParts) == 5 {
+			if fieldParts[3] == "jwt" {
+				// decode jwt and set org id
+			}
+		}
+	case "body":
+		var body map[string]interface{}
+		if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
+			return "", fmt.Errorf("error unmarshalling request body")
+		}
+		val, ok := body[fieldParts[2]]
+		if !ok {
+			return "", fmt.Errorf("org ID field %s not found", orgIDField)
+		}
+		orgID, ok = val.(string)
+		if !ok {
+			return "", fmt.Errorf("org ID field %s can't be converted to a string", orgIDField)
+		}
+		if len(fieldParts) == 5 {
+			if fieldParts[3] == "jwt" {
+				// decode jwt and set org id
+			}
+		}
+	}
+
+	return orgID, nil
+}
+
+func (b *APIGatewayEventBuilder) mapUser(
+	req *events.APIGatewayProxyRequest,
+) (*collect.EventUser, error) {
 	// Map identity
 	// https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging-variables.html
 	identity := req.RequestContext.Identity
 	authorizer := req.RequestContext.Authorizer
-
-	// todo: extract orgID from request based on mapping
-	// eg. from jwt, header, field in body
-	orgID := ""
 
 	user := &collect.EventUser{}
 	if claims, ok := authorizer["claims"]; ok {
@@ -102,45 +218,5 @@ func (b *APIGatewayEventBuilder) Build(
 		user.Name = identity.User
 	}
 
-	event := &collect.EventRaw{
-		// todo: assign new org id if not found in config
-		// why do we even need this here? after mapping the org id field, just map it at write
-		// but if we don't do it here, and we can't find the org id anywhere, this record is unusable?
-		Organization: &collect.EventOrganization{
-			ID: orgID,
-		},
-
-		Route: &collect.EventRoute{
-			Type:   routeType,
-			Method: route.HTTPMethod,
-			Path:   route.Path,
-		},
-
-		User: user,
-
-		Client: &collect.EventClient{
-			Address: identity.SourceIP,
-		},
-
-		RequestedAt: time.Now().UnixNano() / int64(time.Millisecond),
-
-		Request:  req,
-		Response: response,
-		Error:    errorValue,
-
-		// OLD fields
-		// RouteType:   routeType,
-		// HTTPMethod:  route.HTTPMethod,
-		// RoutePath:   route.Path,
-
-		// Action:      req.HTTPMethod,
-		// Location:    identity.SourceIP,
-		// RequestID:   req.RequestContext.RequestID,
-	}
-
-	if req.RequestContext.RequestTimeEpoch > 0 {
-		event.RequestedAt = req.RequestContext.RequestTimeEpoch
-	}
-
-	return event, nil
+	return user, nil
 }

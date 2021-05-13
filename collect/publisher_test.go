@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sync"
@@ -22,6 +23,8 @@ type mockBuilder struct {
 	mock.Mock
 	fn func(
 		m *mockBuilder,
+		rootOrgID string,
+		orgIDField string,
 		routeType RouteType,
 		route *config.Route,
 		request interface{},
@@ -31,16 +34,20 @@ type mockBuilder struct {
 }
 
 func (m *mockBuilder) Build(
+	rootOrgID string,
+	orgIDField string,
 	routeType RouteType,
 	route *config.Route,
 	request interface{},
 	response json.RawMessage,
 	errorValue json.RawMessage,
 ) (*EventRaw, error) {
-	return m.fn(m, routeType, route, request, response, errorValue)
+	return m.fn(m, rootOrgID, orgIDField, routeType, route, request, response, errorValue)
 }
 
 func TestPublish_PublishesEvent(t *testing.T) {
+	expectedRootOrgID := "root-org-id"
+	expectedOrgIDField := "request.headers.x-org-id"
 	expectedRequest := events.APIGatewayProxyRequest{
 		HTTPMethod: http.MethodGet,
 		RequestContext: events.APIGatewayProxyRequestContext{
@@ -140,7 +147,9 @@ func TestPublish_PublishesEvent(t *testing.T) {
 
 	configurer, err := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
-			return []byte(`{
+			return []byte(fmt.Sprintf(`{
+				"root_org_id": "%s",
+				"org_id_field": "%s",
 				"base_url": "https://dev-api.auditr.io/v1",
 				"events_path": "/events",
 				"target": [
@@ -158,7 +167,7 @@ func TestPublish_PublishesEvent(t *testing.T) {
 				"send_interval": 20,
 				"block_on_send": false,
 				"block_on_response": true
-			}`), nil
+			}`, expectedRootOrgID, expectedOrgIDField)), nil
 		}),
 		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
@@ -172,6 +181,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 	b := &mockBuilder{
 		fn: func(
 			m *mockBuilder,
+			rootOrgID string,
+			orgIDField string,
 			routeType RouteType,
 			route *config.Route,
 			request interface{},
@@ -180,6 +191,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 		) (*EventRaw, error) {
 			m.MethodCalled(
 				"Build",
+				rootOrgID,
+				orgIDField,
 				routeType,
 				route,
 				request,
@@ -195,6 +208,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 
 	b.On(
 		"Build",
+		expectedRootOrgID,
+		expectedOrgIDField,
 		expectedEvent.Route.Type,
 		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),
@@ -231,6 +246,8 @@ func TestPublish_PublishesEvent(t *testing.T) {
 }
 
 func TestFlush_PublishesEvent(t *testing.T) {
+	expectedRootOrgID := "root-org-id"
+	expectedOrgIDField := "request.headers.x-org-id"
 	expectedRequest := events.APIGatewayProxyRequest{
 		HTTPMethod: http.MethodGet,
 		RequestContext: events.APIGatewayProxyRequestContext{
@@ -326,7 +343,9 @@ func TestFlush_PublishesEvent(t *testing.T) {
 
 	configurer, err := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
-			return []byte(`{
+			return []byte(fmt.Sprintf(`{
+				"root_org_id": "%s",
+				"org_id_field": "%s",
 				"base_url": "https://dev-api.auditr.io/v1",
 				"events_path": "/events",
 				"target": [
@@ -344,7 +363,7 @@ func TestFlush_PublishesEvent(t *testing.T) {
 				"send_interval": 20,
 				"block_on_send": false,
 				"block_on_response": true
-			}`), nil
+			}`, expectedRootOrgID, expectedOrgIDField)), nil
 		}),
 		config.WithHTTPClient(func() *http.Client {
 			return &http.Client{
@@ -358,6 +377,8 @@ func TestFlush_PublishesEvent(t *testing.T) {
 	b := &mockBuilder{
 		fn: func(
 			m *mockBuilder,
+			rootOrgID string,
+			orgIDField string,
 			routeType RouteType,
 			route *config.Route,
 			request interface{},
@@ -366,6 +387,8 @@ func TestFlush_PublishesEvent(t *testing.T) {
 		) (*EventRaw, error) {
 			m.MethodCalled(
 				"Build",
+				rootOrgID,
+				orgIDField,
 				routeType,
 				route,
 				request,
@@ -381,6 +404,8 @@ func TestFlush_PublishesEvent(t *testing.T) {
 
 	b.On(
 		"Build",
+		expectedRootOrgID,
+		expectedOrgIDField,
 		expectedEvent.Route.Type,
 		expectedRoute,
 		expectedEvent.Request.(events.APIGatewayProxyRequest),

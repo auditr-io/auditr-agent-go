@@ -190,6 +190,8 @@ func (p *EventPublisher) Publish(
 	var err error
 	for _, b := range p.eventBuilders {
 		event, err = b.Build(
+			p.configuration.RootOrgID,
+			p.configuration.OrgIDField,
 			routeType,
 			route,
 			request,
