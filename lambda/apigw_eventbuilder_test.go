@@ -14,7 +14,8 @@ import (
 
 func TestBuild(t *testing.T) {
 	rootOrgID := "root-org-id"
-	orgIDField := "request.headers.x-org-id"
+	externalOrgID := "ext-org-id"
+	orgIDField := "request.header.x-org-id"
 	route := &config.Route{
 		HTTPMethod: http.MethodGet,
 		Path:       "/person/:id",
@@ -35,7 +36,7 @@ func TestBuild(t *testing.T) {
 	requestedAt := time.Now().UnixNano() / int64(time.Millisecond)
 	req := events.APIGatewayProxyRequest{
 		Headers: map[string]string{
-			"x-org-id": rootOrgID,
+			"x-org-id": externalOrgID,
 		},
 		RequestContext: events.APIGatewayProxyRequestContext{
 			Authorizer: map[string]interface{}{
@@ -72,7 +73,7 @@ func TestBuild(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, eventRaw)
 
-	assert.Equal(t, rootOrgID, eventRaw.Organization.ID)
+	assert.Equal(t, externalOrgID, eventRaw.Organization.ID)
 
 	assert.Equal(t, collect.RouteTypeTarget, eventRaw.Route.Type)
 	assert.Equal(t, route.HTTPMethod, eventRaw.Route.Method)

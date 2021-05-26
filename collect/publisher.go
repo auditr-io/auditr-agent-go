@@ -211,7 +211,7 @@ func (p *EventPublisher) Publish(
 	}
 
 	res := Response{
-		Err: fmt.Errorf("Unable to build event: %s", err),
+		Err: fmt.Errorf("Unable to build event: %s, req: %#v", err, request),
 	}
 	writeToChannel(p.responses, res, p.blockOnResponse)
 }
