@@ -94,7 +94,7 @@ func (b *APIGatewayEventBuilder) mapOrgID(
 	// the first field part is always "request"
 	switch fieldParts[1] {
 	case "header":
-		val, ok := req.Headers[fieldParts[2]]
+		val, ok := req.Headers[strings.Title(fieldParts[2])]
 		if !ok {
 			return "", fmt.Errorf("org ID field %s not found", orgIDField)
 		}

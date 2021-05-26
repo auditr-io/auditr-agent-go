@@ -3,6 +3,7 @@ package lambda
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +16,8 @@ import (
 func TestBuild(t *testing.T) {
 	rootOrgID := "root-org-id"
 	externalOrgID := "ext-org-id"
-	orgIDField := "request.header.x-org-id"
+	xOrgIDFieldName := "x-org-id"
+	orgIDField := "request.header." + xOrgIDFieldName
 	route := &config.Route{
 		HTTPMethod: http.MethodGet,
 		Path:       "/person/:id",
@@ -36,7 +38,7 @@ func TestBuild(t *testing.T) {
 	requestedAt := time.Now().UnixNano() / int64(time.Millisecond)
 	req := events.APIGatewayProxyRequest{
 		Headers: map[string]string{
-			"x-org-id": externalOrgID,
+			(strings.Title(xOrgIDFieldName)): externalOrgID,
 		},
 		RequestContext: events.APIGatewayProxyRequestContext{
 			Authorizer: map[string]interface{}{
