@@ -14,7 +14,7 @@ import (
 )
 
 func TestBuild(t *testing.T) {
-	rootOrgID := "root-org-id"
+	parentOrgID := "parent-org-id"
 	externalOrgID := "ext-org-id"
 	xOrgIDFieldName := "x-org-id"
 	orgIDField := "request.header." + xOrgIDFieldName
@@ -64,7 +64,7 @@ func TestBuild(t *testing.T) {
 
 	a := &APIGatewayEventBuilder{}
 	eventRaw, err := a.Build(
-		rootOrgID,
+		parentOrgID,
 		orgIDField,
 		collect.RouteTypeTarget,
 		route,

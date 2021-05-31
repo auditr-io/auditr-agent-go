@@ -16,7 +16,7 @@ type APIGatewayEventBuilder struct{}
 
 // Build builds an event from APIGateway request and response
 func (b *APIGatewayEventBuilder) Build(
-	rootOrgID string,
+	parentOrgID string,
 	orgIDField string,
 	routeType collect.RouteType,
 	route *config.Route,
@@ -29,7 +29,7 @@ func (b *APIGatewayEventBuilder) Build(
 		return nil, fmt.Errorf("request is not of type APIGatewayProxyRequest")
 	}
 
-	orgID, err := b.mapOrgID(rootOrgID, orgIDField, &req)
+	orgID, err := b.mapOrgID(parentOrgID, orgIDField, &req)
 	if err != nil {
 		return nil, err
 	}
@@ -74,14 +74,14 @@ func (b *APIGatewayEventBuilder) Build(
 
 // mapOrgID maps the configured orgIDField to org ID
 func (b *APIGatewayEventBuilder) mapOrgID(
-	rootOrgID string,
+	parentOrgID string,
 	orgIDField string,
 	req *events.APIGatewayProxyRequest,
 ) (string, error) {
 	// todo: extract orgID from request based on mapping
 	// eg. from jwt, header, field in body
 	// Default org ID to root org ID
-	orgID := rootOrgID
+	orgID := parentOrgID
 	if orgIDField == "" {
 		return orgID, nil
 	}

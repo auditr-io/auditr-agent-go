@@ -10,7 +10,7 @@ import (
 type EventBuilder interface {
 	// Build builds an event from the given parameters
 	Build(
-		rootOrgID string,
+		parentOrgID string,
 		orgIDField string,
 		routeType RouteType,
 		route *config.Route,

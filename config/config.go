@@ -30,7 +30,7 @@ var (
 
 // Acquired configuration
 var (
-	RootOrgID            string
+	ParentOrgID          string
 	OrgIDField           string
 	BaseURL              string
 	EventsURL            string
@@ -54,7 +54,7 @@ type Route struct {
 
 // Configuration is used to unmarshal acquired configuration
 type Configuration struct {
-	RootOrgID            string        `json:"root_org_id"`
+	ParentOrgID          string        `json:"parent_org_id"`
 	OrgIDField           string        `json:"org_id_field"`
 	BaseURL              string        `json:"base_url"`
 	EventsPath           string        `json:"events_path"`
@@ -425,7 +425,7 @@ func (c *Configurer) setConfig(body []byte) error {
 
 	c.Configuration.GetEventsClient = c.getEventsClient
 
-	RootOrgID = c.Configuration.RootOrgID
+	ParentOrgID = c.Configuration.ParentOrgID
 	OrgIDField = c.Configuration.OrgIDField
 	BaseURL = c.Configuration.BaseURL
 	EventsURL = c.Configuration.EventsURL

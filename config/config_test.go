@@ -18,7 +18,7 @@ import (
 
 func TestRefresh_SetsConfiguration(t *testing.T) {
 	configBytes := []byte(`{
-		"root_org_id": "root-org-id",
+		"parent_org_id": "parent-org-id",
 		"org_id_field": "request.header.x-org-id",
 		"base_url": "https://dev-api.auditr.io/v1",
 		"events_path": "/events",
@@ -56,7 +56,7 @@ func TestRefresh_SetsConfiguration(t *testing.T) {
 
 	c.OnRefresh(func() {})
 
-	assert.Equal(t, expectedConfig.RootOrgID, RootOrgID)
+	assert.Equal(t, expectedConfig.ParentOrgID, ParentOrgID)
 	assert.Equal(t, expectedConfig.OrgIDField, OrgIDField)
 	assert.Equal(t, expectedConfig.BaseURL, BaseURL)
 	expectedEventsURL, err := url.Parse(expectedConfig.BaseURL)
@@ -82,7 +82,7 @@ func TestRefresh_HasFreshConfig(t *testing.T) {
 	}{
 		{
 			bytes: []byte(`{
-				"root_org_id": "root-org-id",
+				"parent_org_id": "parent-org-id",
 				"org_id_field": "request.header.x-org-id",
 				"base_url": "https://dev-api.auditr.io/v1",
 				"events_path": "/events",
@@ -105,7 +105,7 @@ func TestRefresh_HasFreshConfig(t *testing.T) {
 		},
 		{
 			bytes: []byte(`{
-				"root_org_id": "root-org-id",
+				"parent_org_id": "parent-org-id",
 				"org_id_field": "request.header.x-org-id",
 				"base_url": "https://dev-api.auditr.io/v1",
 				"events_path": "/events",
@@ -178,7 +178,7 @@ func TestRefresh_HasFreshConfig(t *testing.T) {
 
 func TestOnRefresh_ParallelRegistration(t *testing.T) {
 	configBytes := []byte(`{
-		"root_org_id": "root-org-id",
+		"parent_org_id": "parent-org-id",
 		"org_id_field": "request.header.x-org-id",
 		"base_url": "https://dev-api.auditr.io/v1",
 		"events_path": "/events",
@@ -254,7 +254,7 @@ func TestOnRefresh_ParallelRegistration(t *testing.T) {
 
 func TestOnRefresh_RefreshesAsManyTimes(t *testing.T) {
 	configBytes := []byte(`{
-		"root_org_id": "root-org-id",
+		"parent_org_id": "parent-org-id",
 		"org_id_field": "request.header.x-org-id",
 		"base_url": "https://dev-api.auditr.io/v1",
 		"events_path": "/events",

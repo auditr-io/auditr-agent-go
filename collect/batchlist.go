@@ -38,7 +38,7 @@ type Response struct {
 // UnmarshalJSON deserializes response from processing an event
 func (r *Response) UnmarshalJSON(b []byte) error {
 	res := struct {
-		Error  string
+		Error  string // todo: change this to model error
 		Status int
 	}{}
 	if err := json.Unmarshal(b, &res); err != nil {
