@@ -55,7 +55,7 @@ func (b *APIGatewayEventBuilder) Build(
 		User: user,
 
 		Client: &collect.EventClient{
-			Address: identity.SourceIP,
+			IP: identity.SourceIP,
 		},
 
 		RequestedAt: time.Now().UnixNano() / int64(time.Millisecond),

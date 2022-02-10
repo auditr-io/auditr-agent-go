@@ -1,5 +1,7 @@
 package collect
 
+// todo: mv params and responses out of model and ref that here instead
+
 // Event is an audit event
 // type Event struct {
 // 	ID            string      `json:"id"`

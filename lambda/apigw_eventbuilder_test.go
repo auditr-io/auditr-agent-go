@@ -32,7 +32,7 @@ func TestBuild(t *testing.T) {
 	}
 
 	client := &collect.EventClient{
-		Address: "1.2.3.4",
+		IP: "1.2.3.4",
 	}
 
 	requestedAt := time.Now().UnixNano() / int64(time.Millisecond)
@@ -52,7 +52,7 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			Identity: events.APIGatewayRequestIdentity{
-				SourceIP: client.Address,
+				SourceIP: client.IP,
 			},
 			RequestTimeEpoch: requestedAt,
 		},

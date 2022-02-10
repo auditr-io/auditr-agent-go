@@ -74,7 +74,7 @@ type Configuration struct {
 	GetEventsClient HTTPClientProvider
 }
 
-// UnmarshalJSON deserailizes JSON into configuration
+// UnmarshalJSON deserializes JSON into configuration
 func (c *Configuration) UnmarshalJSON(b []byte) error {
 	type configurationAlias Configuration
 	cfg := &struct {
@@ -316,7 +316,7 @@ func (c *Configurer) configure() error {
 	}
 
 	if len(body) == 0 {
-		return errors.New("Config body is empty")
+		return errors.New("config body is empty")
 	}
 
 	if err := c.setConfig(body); err != nil {
@@ -376,6 +376,7 @@ func (c *Configurer) watchConfigFile(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
+				// used for test assertion
 				c.watcherDonec <- struct{}{}
 				return
 			case event, ok := <-c.fileEventc:

@@ -63,6 +63,7 @@ func (a *Agent) AfterExecution(
 	response interface{},
 	errorValue interface{},
 ) {
+	// todo: warn on err marshalling
 	res, _ := json.Marshal(response)
 	errValue, _ := json.Marshal(errorValue)
 
