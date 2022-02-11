@@ -8,47 +8,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 
 	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/auditr-agent-go/config"
-)
-
-type copyWriter struct {
-	recorder       *httptest.ResponseRecorder
-	bodyWriter     io.Writer
-	responseWriter http.ResponseWriter
-}
-
-func CopyWriter(w http.ResponseWriter) *copyWriter {
-	recorder := httptest.NewRecorder()
-
-	return &copyWriter{
-		recorder:       recorder,
-		bodyWriter:     io.MultiWriter(w, recorder),
-		responseWriter: w,
-	}
-}
-
-func (c *copyWriter) Header() http.Header {
-	return c.responseWriter.Header()
-}
-
-func (c *copyWriter) Write(p []byte) (int, error) {
-	return c.bodyWriter.Write(p)
-}
-
-func (c *copyWriter) WriteHeader(statusCode int) {
-	for k, v := range c.responseWriter.Header() {
-		c.recorder.Header().Add(k, v[0])
-	}
-	c.responseWriter.WriteHeader(statusCode)
-	c.recorder.WriteHeader(statusCode)
-}
-
-var (
-	cw *copyWriter
+	"github.com/auditr-io/auditr-agent-go/wrappers/common"
 )
 
 // Agent is an auditr agent that collects and reports events
@@ -86,7 +50,7 @@ func NewAgentWithConfiguration(
 // WrapHandler wraps an HTTP Handler (e.g. http.ServeMux) to enable auditing
 func (a *Agent) WrapHandler(handler http.Handler) http.Handler {
 	wrappedHandler := func(w http.ResponseWriter, req *http.Request) {
-		cw = CopyWriter(w)
+		cw := common.NewCopyWriter(w)
 
 		reqCopy := HTTPRequest{
 			Method:  req.Method,
@@ -119,7 +83,7 @@ func (a *Agent) WrapHandler(handler http.Handler) http.Handler {
 			resource = rsrc
 		}
 
-		result := cw.recorder.Result()
+		result := cw.Response()
 
 		bodyBytes := make([]byte, 100000)
 		_, err := io.ReadFull(result.Body, bodyBytes)

@@ -150,14 +150,9 @@ func TestWrapHandler(t *testing.T) {
 
 	a.WrapHandler(mux).ServeHTTP(w, r)
 
-	res := cw.recorder.Result()
 	actual := w.Result()
-	assert.Equal(t, expectedStatusCode, res.StatusCode)
 	assert.Equal(t, expectedStatusCode, actual.StatusCode)
-	assert.Equal(t, expectedHeaders, res.Header)
 	assert.Equal(t, expectedHeaders, actual.Header)
-	// resBody, _ := ioutil.ReadAll(res.Body)
-	// assert.Equal(t, expectedBodyBuf, resBody)
 	actualBody, _ := ioutil.ReadAll(actual.Body)
 	assert.Equal(t, expectedBodyBuf, actualBody)
 }
