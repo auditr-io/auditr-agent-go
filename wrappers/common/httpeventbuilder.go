@@ -1,4 +1,4 @@
-package auditrhttp
+package common
 
 import (
 	"encoding/json"

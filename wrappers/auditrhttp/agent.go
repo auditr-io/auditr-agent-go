@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 
 	"github.com/auditr-io/auditr-agent-go/collect"
 	"github.com/auditr-io/auditr-agent-go/config"
@@ -35,7 +34,7 @@ func NewAgentWithConfiguration(
 
 	c, err := collect.NewCollector(
 		[]collect.EventBuilder{
-			&HTTPEventBuilder{},
+			&common.HTTPEventBuilder{},
 		},
 		configuration,
 	)
@@ -52,7 +51,7 @@ func (a *Agent) WrapHandler(handler http.Handler) http.Handler {
 	wrappedHandler := func(w http.ResponseWriter, req *http.Request) {
 		cw := common.NewCopyWriter(w)
 
-		reqCopy := HTTPRequest{
+		reqCopy := common.HTTPRequest{
 			Method:  req.Method,
 			URL:     req.URL,
 			Headers: req.Header,
@@ -92,7 +91,7 @@ func (a *Agent) WrapHandler(handler http.Handler) http.Handler {
 			log.Printf("failed to read body")
 		}
 
-		res := HTTPResponse{
+		res := common.HTTPResponse{
 			StatusCode: result.StatusCode,
 			Headers:    result.Header,
 			Body:       string(bodyBytes),
@@ -116,19 +115,4 @@ func (a *Agent) WrapHandler(handler http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(wrappedHandler)
-}
-
-// HTTPResponse encapsulates HTTP response
-type HTTPResponse struct {
-	StatusCode int                 `json:"status_code"`
-	Headers    map[string][]string `json:"headers"`
-	Body       string              `json:"body"`
-}
-
-// HTTPRequest encapsulates HTTP request
-type HTTPRequest struct {
-	Method  string      `json:"method"`
-	URL     *url.URL    `json:"url"`
-	Headers http.Header `json:"headers"`
-	Body    string      `json:"body"`
 }
