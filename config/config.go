@@ -13,19 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/auditr-io/httpclient"
 	"github.com/fsnotify/fsnotify"
-	"github.com/spf13/viper"
 )
 
 const (
 	ConfigDir  = "/tmp"
-	ConfigPath = ConfigDir + "/config"
-)
-
-// Seed configuration
-var (
-	// APIKey is the API key to use with API calls
-	APIKey string
+	ConfigPath = ConfigDir + "/auditr-config"
 )
 
 // Acquired configuration
@@ -157,20 +151,6 @@ func WithHTTPClient(client HTTPClientProvider) ConfigurerOption {
 
 // Init initializes the configuration
 func Init() error {
-	viper.SetConfigType("env")
-	viper.BindEnv("auditr_api_key")
-
-	// If a config file is available, load the env vars in it
-	if configFile, ok := os.LookupEnv("ENV_PATH"); ok {
-		viper.SetConfigFile(configFile)
-
-		if err := viper.ReadInConfig(); err != nil {
-			log.Printf("Error reading config file: %v\n", err)
-		}
-	}
-
-	APIKey = viper.GetString("auditr_api_key")
-
 	ensureSeedConfig()
 
 	var err error
@@ -189,19 +169,18 @@ func Init() error {
 
 // DefaultEventsClientProvider returns the default HTTP client with authorization parameters
 func DefaultEventsClientProvider() *http.Client {
-	client, err := NewHTTPClient(EventsURL)
+	client, err := httpclient.NewClient(
+		EventsURL,
+		nil,
+		http.Header{
+			"Authorization": []string{APIKey},
+		},
+	)
 	if err != nil {
 		log.Fatalf("Failed to create events HTTP client: %#v", err)
 	}
 
 	return client
-}
-
-// ensureSeedConfig ensures seed config is provided
-func ensureSeedConfig() {
-	if APIKey == "" {
-		log.Fatal("AUDITR_API_KEY must be set")
-	}
 }
 
 // Refresh refreshes the configuration as the config file

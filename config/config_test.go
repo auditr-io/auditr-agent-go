@@ -1,9 +1,12 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -11,10 +14,82 @@ import (
 	"testing"
 	"time"
 
+	"github.com/auditr-io/testmock"
 	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+func TestRefreshWithFetcher_SetsConfiguration(t *testing.T) {
+	configBytes := []byte(`{
+		"parent_org_id": "parent-org-id",
+		"org_id_field": "request.header.x-org-id",
+		"base_url": "https://dev-api.auditr.io/v1",
+		"events_path": "/events",
+		"target": [
+			{
+				"method": "GET",
+				"path": "/person/:id"
+			}
+		],
+		"sample": [],
+		"flush": false,
+		"cache_duration": 2,
+		"max_events_per_batch": 10,
+		"max_concurrent_batches": 10,
+		"pending_work_capacity": 20,
+		"send_interval": 20,
+		"block_on_send": false,
+		"block_on_response": true
+	}`)
+	var expectedConfig *Configuration
+	json.Unmarshal(configBytes, &expectedConfig)
+
+	m := &testmock.MockTransport{
+		RoundTripFn: func(m *testmock.MockTransport, req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       ioutil.NopCloser(bytes.NewBuffer(configBytes)),
+			}, nil
+		},
+	}
+
+	f, err := NewFetcher(FetcherOptions{
+		HTTPTransport: m,
+	})
+	assert.NoError(t, err)
+
+	c, err := NewConfigurer(
+		WithConfigProvider(
+			f.GetConfig,
+		),
+	)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	err = c.Refresh(ctx)
+	assert.NoError(t, err)
+
+	c.OnRefresh(func() {})
+
+	assert.Equal(t, expectedConfig.ParentOrgID, ParentOrgID)
+	assert.Equal(t, expectedConfig.OrgIDField, OrgIDField)
+	assert.Equal(t, expectedConfig.BaseURL, BaseURL)
+	expectedEventsURL, err := url.Parse(expectedConfig.BaseURL)
+	assert.NoError(t, err)
+	expectedEventsURL.Path = path.Join(expectedEventsURL.Path, expectedConfig.EventsPath)
+	assert.Equal(t, expectedEventsURL.String(), EventsURL)
+	assert.Equal(t, expectedConfig.TargetRoutes, TargetRoutes)
+	assert.Equal(t, expectedConfig.SampleRoutes, SampleRoutes)
+	assert.Equal(t, expectedConfig.CacheDuration, CacheDuration)
+	assert.Equal(t, expectedConfig.Flush, Flush)
+	assert.Equal(t, expectedConfig.MaxEventsPerBatch, MaxEventsPerBatch)
+	assert.Equal(t, expectedConfig.MaxConcurrentBatches, MaxConcurrentBatches)
+	assert.Equal(t, expectedConfig.PendingWorkCapacity, PendingWorkCapacity)
+	assert.Equal(t, expectedConfig.SendInterval, SendInterval)
+	assert.Equal(t, expectedConfig.BlockOnSend, BlockOnSend)
+	assert.Equal(t, expectedConfig.BlockOnResponse, BlockOnResponse)
+}
 
 func TestRefresh_SetsConfiguration(t *testing.T) {
 	configBytes := []byte(`{
