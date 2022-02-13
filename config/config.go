@@ -157,6 +157,9 @@ func Init() error {
 	configurerOnce.Do(func() {
 		configurer, err = NewConfigurer()
 	})
+	if err != nil {
+		return err
+	}
 
 	err = configurer.Refresh(context.Background())
 	if err != nil {
