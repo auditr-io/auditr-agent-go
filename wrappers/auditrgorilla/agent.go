@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/auditr-io/auditr-agent-go/collect"
@@ -20,11 +21,25 @@ import (
 //   agent, err := auditrhttp.NewAgent()
 type Agent struct {
 	collector *collect.Collector
+	fetcher   *config.Fetcher
 }
 
 // NewAgent creates a new agent with default configuration
 func NewAgent() (*Agent, error) {
-	return NewAgentWithConfiguration(nil)
+	f, err := config.NewFetcher(config.FetcherOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	f.Refresh(context.Background())
+
+	a, err := NewAgentWithConfiguration(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	a.fetcher = f
+	return a, nil
 }
 
 // NewAgentWithConfigurartion creates a new agent with overriden configuration
@@ -47,6 +62,7 @@ func NewAgentWithConfiguration(
 	return a, nil
 }
 
+// Middleware audits HTTP handlers
 func (a *Agent) Middleware(handler http.Handler) http.Handler {
 	wrappedHandler := func(w http.ResponseWriter, req *http.Request) {
 		cw := common.NewCopyWriter(w)
@@ -66,7 +82,16 @@ func (a *Agent) Middleware(handler http.Handler) http.Handler {
 		reqCopy := common.HTTPRequest{
 			Method:  req.Method,
 			URL:     req.URL,
-			Headers: req.Header,
+			Headers: req.Header.Clone(),
+		}
+
+		if reqCopy.Headers.Get("X-Forwarded-For") == "" {
+			if req.RemoteAddr != "" {
+				if ip, port, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+					reqCopy.Headers.Set("Remote-Address-Ip", ip)
+					reqCopy.Headers.Set("Remote-Address-Port", port)
+				}
+			}
 		}
 
 		if req.Body != nil {
@@ -85,8 +110,7 @@ func (a *Agent) Middleware(handler http.Handler) http.Handler {
 
 		result := cw.Response()
 
-		bodyBytes := make([]byte, 100000)
-		_, err := io.ReadFull(result.Body, bodyBytes)
+		bodyBytes, err := io.ReadAll(result.Body)
 		if err != nil && err != io.ErrUnexpectedEOF {
 			// despite the error, we'll still send what we got
 			log.Printf("failed to read body")
@@ -116,4 +140,15 @@ func (a *Agent) Middleware(handler http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(wrappedHandler)
+}
+
+// Fetches returns the stream of refreshed configs
+// Config may be nil if refresh failed
+func (a *Agent) Fetches() <-chan []byte {
+	return a.fetcher.Refreshes()
+}
+
+// FetchErrors returns the stream of errors
+func (a *Agent) FetchErrors() <-chan error {
+	return a.fetcher.Errors()
 }

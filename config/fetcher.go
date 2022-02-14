@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/auditr-io/httpclient"
+	"github.com/tidwall/gjson"
 )
 
 const (
@@ -25,14 +26,16 @@ type FetcherOptions struct {
 
 // Fetcher periodically fetches config and caches the config locally
 type Fetcher struct {
-	configURL     string
-	interval      time.Duration
-	httpTransport http.RoundTripper
-	writeCache    func([]byte) error
+	configURL         string
+	interval          time.Duration
+	intervalOverriden bool
+	httpTransport     http.RoundTripper
+	writeCache        func([]byte) error
 
 	httpClient *http.Client
 	refreshesc chan []byte
 	errc       chan error
+	ticker     *time.Ticker
 }
 
 // NewFetcher creates a new fetcher with given options
@@ -40,12 +43,19 @@ func NewFetcher(opts FetcherOptions) (*Fetcher, error) {
 	ensureSeedConfig()
 
 	f := &Fetcher{
-		httpTransport: opts.HTTPTransport,
-		configURL:     ConfigURL,
-		interval:      opts.Interval,
-		writeCache:    WriteFile,
-		refreshesc:    make(chan []byte, 1),
-		errc:          make(chan error, 1),
+		httpTransport:     opts.HTTPTransport,
+		configURL:         ConfigURL,
+		intervalOverriden: false,
+		writeCache:        WriteFile,
+		refreshesc:        make(chan []byte, 1),
+		errc:              make(chan error, 1),
+	}
+
+	f.setInterval(MinInterval)
+	if opts.Interval > 0 {
+		// set as is for overrides
+		f.interval = opts.Interval
+		f.intervalOverriden = true
 	}
 
 	if opts.ConfigURL != "" {
@@ -54,13 +64,6 @@ func NewFetcher(opts FetcherOptions) (*Fetcher, error) {
 
 	if opts.WriteCache != nil {
 		f.writeCache = opts.WriteCache
-	}
-
-	if f.interval <= 0 {
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		// fetch before the duration is reached
-		interval := CacheDuration - time.Duration(r.Intn(10))*time.Second
-		f.interval = MinInterval + interval
 	}
 
 	c, err := httpclient.NewClient(
@@ -78,21 +81,39 @@ func NewFetcher(opts FetcherOptions) (*Fetcher, error) {
 	return f, nil
 }
 
+func (f *Fetcher) setInterval(interval time.Duration) {
+	if f.intervalOverriden {
+		return
+	}
+
+	// set a random, slightly earlier interval
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	f.interval = interval - time.Duration(r.Intn(10))*time.Second
+	if f.interval <= 0 {
+		// shouldn't happen. just in case
+		f.interval = MinInterval + f.interval
+	}
+
+	if f.ticker != nil {
+		f.ticker.Reset(f.interval)
+	}
+}
+
 // Refresh sets up the interval to fetch a fresh config
 func (f *Fetcher) Refresh(ctx context.Context) {
 	// don't wait for the first interval
 	f.fetchAndCache()
 
-	ticker := time.NewTicker(f.interval)
+	f.ticker = time.NewTicker(f.interval)
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				ticker.Stop()
+				f.ticker.Stop()
 				return
 
-			case <-ticker.C:
+			case <-f.ticker.C:
 				f.fetchAndCache()
 			}
 		}
@@ -113,6 +134,9 @@ func (f *Fetcher) fetchAndCache() {
 	}
 
 	f.refreshesc <- cfg
+
+	cd := gjson.Get(string(cfg), "cache_duration")
+	f.setInterval(time.Duration(cd.Int() * int64(time.Second)))
 }
 
 // GetConfig gets a fresh config

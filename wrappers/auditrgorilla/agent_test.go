@@ -30,6 +30,7 @@ func TestNewAgent_ReturnsAgent(t *testing.T) {
 	configurer, err := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
 			return []byte(`{
+				"parent_org_id": "org_xxx",
 				"base_url": "https://dev-api.auditr.io/v1",
 				"events_path": "/events",
 				"target": [
@@ -106,6 +107,7 @@ func TestMiddleware(t *testing.T) {
 	configurer, err := config.NewConfigurer(
 		config.WithConfigProvider(func() ([]byte, error) {
 			return []byte(`{
+				"parent_org_id": "org_xxx",
 				"base_url": "https://dev-api.auditr.io/v1",
 				"events_path": "/events",
 				"target": [
