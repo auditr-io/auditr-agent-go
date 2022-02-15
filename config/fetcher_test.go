@@ -155,8 +155,9 @@ func TestRefresh(t *testing.T) {
 }
 
 func TestRefreshWithWriteFile(t *testing.T) {
+	configPath := "/tmp/" + t.Name() + "-auditr-config"
 	t.Cleanup(func() {
-		os.Remove(ConfigPath)
+		os.Remove(configPath)
 	})
 
 	wantRefreshes := 3
@@ -198,6 +199,7 @@ func TestRefreshWithWriteFile(t *testing.T) {
 
 	f, err := NewFetcher(FetcherOptions{
 		ConfigURL:     "https://" + t.Name() + ".auditr.io",
+		ConfigPath:    configPath,
 		HTTPTransport: m,
 		Interval:      10 * time.Millisecond,
 	})
@@ -217,7 +219,7 @@ func TestRefreshWithWriteFile(t *testing.T) {
 			case r := <-f.Refreshes():
 				assert.Equal(t, wantCfgs[refreshes], r)
 
-				cfgf, err := os.Open(ConfigPath)
+				cfgf, err := os.Open(configPath)
 				assert.NoError(t, err)
 				cfg, err := ioutil.ReadAll(cfgf)
 				assert.NoError(t, err)

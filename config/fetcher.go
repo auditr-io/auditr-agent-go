@@ -19,6 +19,7 @@ const (
 // FetcherOptions allow override of defaults
 type FetcherOptions struct {
 	ConfigURL     string
+	ConfigPath    string
 	Interval      time.Duration
 	HTTPTransport http.RoundTripper
 	WriteCache    func([]byte) error
@@ -27,6 +28,7 @@ type FetcherOptions struct {
 // Fetcher periodically fetches config and caches the config locally
 type Fetcher struct {
 	configURL         string
+	configPath        string
 	interval          time.Duration
 	intervalOverriden bool
 	httpTransport     http.RoundTripper
@@ -45,8 +47,8 @@ func NewFetcher(opts FetcherOptions) (*Fetcher, error) {
 	f := &Fetcher{
 		httpTransport:     opts.HTTPTransport,
 		configURL:         ConfigURL,
+		configPath:        ConfigPath,
 		intervalOverriden: false,
-		writeCache:        WriteFile,
 		refreshesc:        make(chan []byte, 1),
 		errc:              make(chan error, 1),
 	}
@@ -62,6 +64,11 @@ func NewFetcher(opts FetcherOptions) (*Fetcher, error) {
 		f.configURL = opts.ConfigURL
 	}
 
+	if opts.ConfigPath != "" {
+		f.configPath = opts.ConfigPath
+	}
+
+	f.writeCache = f.WriteFile
 	if opts.WriteCache != nil {
 		f.writeCache = opts.WriteCache
 	}
@@ -166,6 +173,6 @@ func (f *Fetcher) Errors() <-chan error {
 }
 
 // WriteFile caches the config at ConfigPath
-func WriteFile(cfg []byte) error {
-	return os.WriteFile(ConfigPath, cfg, 0644)
+func (f *Fetcher) WriteFile(cfg []byte) error {
+	return os.WriteFile(f.configPath, cfg, 0644)
 }

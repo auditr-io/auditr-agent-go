@@ -289,53 +289,41 @@ func TestOnRefresh_ParallelRegistration(t *testing.T) {
 	m.On("work1").Return().Once()
 	m.On("work2").Return().Once()
 
-	// expectedCalls := 2
-	// callStack := make(chan struct{})
+	expectedCalls := 2
+	callStack := make(chan struct{})
 
-	c.OnRefresh(func() {
-		m.MethodCalled("work1")
-		// callStack <- struct{}{}
-		assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
-	})
+	var wg sync.WaitGroup
+	wg.Add(expectedCalls)
+	go func() {
+		defer wg.Done()
 
-	c.OnRefresh(func() {
-		m.MethodCalled("work2")
-		// callStack <- struct{}{}
-		assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
-	})
+		c.OnRefresh(func() {
+			m.MethodCalled("work1")
+			callStack <- struct{}{}
+			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
+		})
+	}()
 
-	// var wg sync.WaitGroup
-	// wg.Add(expectedCalls)
-	// go func() {
-	// 	defer wg.Done()
+	go func() {
+		defer wg.Done()
 
-	// 	c.OnRefresh(func() {
-	// 		m.MethodCalled("work1")
-	// 		callStack <- struct{}{}
-	// 		assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
-	// 	})
-	// }()
+		c.OnRefresh(func() {
+			m.MethodCalled("work2")
+			callStack <- struct{}{}
+			assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
+		})
+	}()
 
-	// go func() {
-	// 	defer wg.Done()
-
-	// 	c.OnRefresh(func() {
-	// 		m.MethodCalled("work2")
-	// 		callStack <- struct{}{}
-	// 		assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
-	// 	})
-	// }()
-
-	// wg.Wait()
+	wg.Wait()
 
 	ctx := context.Background()
 	err = c.Refresh(ctx)
 	assert.NoError(t, err)
 
 	<-c.Configured()
-	// for i := 0; i < expectedCalls; i++ {
-	// 	<-callStack
-	// }
+	for i := 0; i < expectedCalls; i++ {
+		<-callStack
+	}
 
 	m.AssertExpectations(t)
 }
@@ -375,13 +363,13 @@ func TestOnRefresh_RefreshesAsManyTimes(t *testing.T) {
 	assert.NoError(t, err)
 
 	expectedCalls := 2
-	// callStack := make(chan struct{})
+	callStack := make(chan struct{})
 	m := mock.Mock{}
 	m.On("work").Return().Times(expectedCalls)
 
 	c.OnRefresh(func() {
 		m.MethodCalled("work")
-		// callStack <- struct{}{}
+		callStack <- struct{}{}
 		assert.Equal(t, expectedConfig.BaseURL, c.Configuration.BaseURL)
 	})
 
@@ -396,9 +384,9 @@ func TestOnRefresh_RefreshesAsManyTimes(t *testing.T) {
 	assert.NoError(t, err)
 
 	<-c.Configured()
-	// for i := 0; i < expectedCalls; i++ {
-	// 	<-callStack
-	// }
+	for i := 0; i < expectedCalls; i++ {
+		<-callStack
+	}
 
 	m.AssertExpectations(t)
 }
